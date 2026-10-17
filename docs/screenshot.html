@@ -1,0 +1,121 @@
+<!doctype html>
+<!-- Source of docs/screenshot.png. Render at 2x, clipped to #demo, with a transparent background. -->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root {
+        --bg: #0f1117;
+        --chrome: #171a22;
+        --fg: #d4d8e0;
+        --gray: #4b5263;
+        --dim: #7c8496;
+        --cyan: #4fc1c9;
+        --green: #8fd18a;
+      }
+      body {
+        margin: 0;
+        padding: 4px;
+        background: transparent;
+        font-family: "CaskaydiaMono Nerd Font Mono", "Cascadia Mono", "JetBrains Mono", Menlo, monospace;
+      }
+      #demo {
+        display: flex;
+        gap: 20px;
+        width: 1000px;
+      }
+      .window {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--bg);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 36px;
+        padding: 0 14px;
+        background: var(--chrome);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .dot { width: 11px; height: 11px; border-radius: 50%; }
+      .title {
+        flex: 1;
+        margin-right: 49px;
+        text-align: center;
+        color: var(--dim);
+        font-size: 12.5px;
+      }
+      pre {
+        flex: 1;
+        margin: 0;
+        padding: 16px 20px 20px;
+        color: var(--fg);
+        font: inherit;
+        font-size: 14px;
+        line-height: 1.3;
+      }
+      .g { color: var(--gray); }
+      .d { color: var(--dim); }
+      .c { color: var(--cyan); }
+      .gr { color: var(--green); }
+      .b { font-weight: 700; }
+      .tag { background: var(--cyan); color: #0b0d12; }
+    </style>
+  </head>
+  <body>
+    <div id="demo">
+      <div class="window">
+        <div class="bar">
+          <span class="dot" style="background: #ff5f57"></span>
+          <span class="dot" style="background: #febc2e"></span>
+          <span class="dot" style="background: #28c840"></span>
+          <span class="title">switch accounts</span>
+        </div>
+<pre><span class="c">~</span> <span class="gr">❯</span> seats
+<span class="g">┌</span>  <span class="tag"> seats </span>
+<span class="g">│</span>
+<span class="gr">◇</span>  Found 6 signed-in seats
+<span class="g">│</span>
+<span class="gr">◇</span>  What kind of seat?
+<span class="g">│</span>  <span class="d">CLI</span>
+<span class="g">│</span>
+<span class="c">◆</span>  Which seat do you want to use?
+<span class="c">│</span>  <span class="gr">●</span> claude · Work <span class="d">(you@work.example)</span>
+<span class="c">│</span>  <span class="d">○ claude · Personal</span>
+<span class="c">│</span>  <span class="d">○ codex · Default</span>
+<span class="c">│</span>  <span class="d">○ gemini · Default</span>
+<span class="c">│</span>  <span class="d">○ copilot · Default</span>
+<span class="c">│</span>  <span class="d">↑/↓</span> to navigate • <span class="d">Enter:</span> confirm
+<span class="c">└</span></pre>
+      </div>
+      <div class="window">
+        <div class="bar">
+          <span class="dot" style="background: #ff5f57"></span>
+          <span class="dot" style="background: #febc2e"></span>
+          <span class="dot" style="background: #28c840"></span>
+          <span class="title">share your setup</span>
+        </div>
+<pre><span class="c">~</span> <span class="gr">❯</span> seats sync
+
+<span class="b">MCP servers</span>
+  library  add github, sentry, linear
+  <span class="gr">+</span> codex            sentry, linear
+  <span class="gr">+</span> cursor           github
+  <span class="gr">+</span> gemini           github, sentry, linear
+
+<span class="b">Skills</span>
+  library  add review
+  <span class="gr">+</span> claude           review
+  <span class="gr">+</span> kiro             review, deploy
+
+<span class="b">Instructions</span>
+  link to ~/.config/seats/shared/AGENTS.md: kiro</pre>
+      </div>
+    </div>
+  </body>
+</html>

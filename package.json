@@ -1,0 +1,47 @@
+{
+  "name": "seats",
+  "version": "0.1.0",
+  "description": "Switch the active AI seat from your terminal. Interactive picker for CLI tools, API keys and cloud profiles.",
+  "keywords": [
+    "cli",
+    "claude",
+    "codex",
+    "gemini",
+    "accounts",
+    "interactive"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "seats": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "dev": "bun src/cli.ts",
+    "start": "bun src/cli.ts",
+    "build": "bun build src/cli.ts --outfile dist/cli.js --target node --minify && bun build src/lib.ts --outfile dist/lib.js --target node",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.8.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/lib.ts",
+      "default": "./dist/lib.js"
+    }
+  }
+}
