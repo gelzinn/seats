@@ -2,6 +2,7 @@
 // A JSON import, so compiled binaries carry their version without reading package.json.
 import { version } from "../package.json";
 import { addCommand } from "./commands/add.ts";
+import { exportCommand, importCommand } from "./commands/export.ts";
 import { healthCommand } from "./commands/health.ts";
 import { installCommand, uninstallCommand } from "./commands/install.ts";
 import { currentCommand, listCommand } from "./commands/list.ts";
@@ -40,6 +41,11 @@ Usage:
   seats uninstall mcp|skill <name>
                         Remove it from every tool; a server is marked so sync
                         won't add it back (--dry-run to preview)
+  seats export <folder> Write your shared setup (MCP servers, skills, instructions,
+                        shared tool config) to a folder, without secrets or
+                        accounts, to carry to another machine (--dry-run to preview)
+  seats import <folder> Add an export to this machine without replacing local
+                        files, then sync (--dry-run to preview)
   seats migrate         Move ~/.<tool>-* seat folders into ~/.config/seats
                         (--dry-run to preview)
   seats help            Show this help
@@ -59,6 +65,8 @@ Examples:
   seats install mcp docs -- npx -y docs-mcp
   seats install skill ./review --dry-run
   seats uninstall mcp docs
+  seats export ~/dotfiles/seats
+  seats import ~/dotfiles/seats --dry-run
 `;
 
 const help = async () => console.log(HELP);
@@ -68,9 +76,11 @@ const printVersion = async () => console.log(version);
 const commands: Record<string, (args: string[]) => Promise<void>> = {
   add: addCommand,
   "auto-switch": autoSwitchCommand,
+  export: exportCommand,
   current: currentCommand,
   health: healthCommand,
   hook: hookCommand,
+  import: importCommand,
   help,
   "--help": help,
   "-h": help,

@@ -3,6 +3,20 @@
  * comments, order and formatting stay byte for byte.
  */
 
+/** TOML bare key when allowed, quoted otherwise. */
+export const tomlKey = (key: string) => (/^[A-Za-z0-9_-]+$/.test(key) ? key : JSON.stringify(key));
+
+/** A value as TOML: JSON strings are valid basic strings, records become inline tables. */
+export function tomlValue(value: unknown): string {
+  if (typeof value === "string") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(tomlValue).join(", ")}]`;
+  if (value && typeof value === "object") {
+    const fields = Object.entries(value).map(([key, item]) => `${tomlKey(key)} = ${tomlValue(item)}`);
+    return `{ ${fields.join(", ")} }`;
+  }
+  return String(value);
+}
+
 type ScanState = { depth: number; multiline?: string };
 
 const isBlank = (line: string) => line.trim() === "";

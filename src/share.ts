@@ -14,7 +14,7 @@ function backupPath(path: string): string {
   return candidate;
 }
 
-function parseRecord(buffer: Buffer): Record<string, unknown> | undefined {
+export function parseRecord(buffer: Buffer): Record<string, unknown> | undefined {
   try {
     const value = JSON.parse(buffer.toString("utf8"));
     return isRecord(value) ? value : undefined;
@@ -23,12 +23,12 @@ function parseRecord(buffer: Buffer): Record<string, unknown> | undefined {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 /** Newer wins on conflicts; keys only the older copy has are kept at every depth. */
-function deepFill(newer: unknown, older: unknown): unknown {
+export function deepFill(newer: unknown, older: unknown): unknown {
   if (!isRecord(newer) || !isRecord(older)) return newer;
   const merged: Record<string, unknown> = { ...older };
   for (const [key, value] of Object.entries(newer)) merged[key] = deepFill(value, older[key]);

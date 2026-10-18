@@ -106,6 +106,11 @@ export function moveTree(from: string, to: string): void {
   }
 }
 
+/** `text` with every path under `from` moved under `to`. `seats migrate` and `seats export` rewrite config files with it. */
+export function replacePathPrefix(text: string, from: string, to: string): string {
+  return text.replaceAll(`${from}/`, `${to}/`);
+}
+
 /** Writes through symlinks: the link stays, the file it points at is replaced. */
 export function writeJsonAtomic(path: string, data: unknown): void {
   const real = existsSync(path) ? realpathSync(path) : path;
