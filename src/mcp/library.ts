@@ -28,7 +28,7 @@ export type McpSyncReport = {
 const lower = (name: string) => name.toLowerCase();
 
 /** `${VAR}`, `$VAR`, `{env:VAR}`: every tool spells env references differently. */
-const usesEnvRefs = (server: McpServer) =>
+export const usesEnvRefs = (server: McpServer) =>
   Object.values({ ...server.env, ...server.headers }).some((value) =>
     /\$\{?[A-Za-z_]|\{env:/.test(value),
   );

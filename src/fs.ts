@@ -6,6 +6,7 @@ import {
   readlinkSync,
   realpathSync,
   renameSync,
+  statSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
@@ -111,6 +112,14 @@ export function writeJsonAtomic(path: string, data: unknown): void {
   mkdirSync(dirname(real), { recursive: true, mode: 0o700 });
   const tmp = join(dirname(real), `.${basename(real)}.seats-${process.pid}`);
   writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
+  renameSync(tmp, real);
+}
+
+/** Replaces an existing file's text through symlinks, keeping its mode. */
+export function writeTextAtomic(path: string, text: string): void {
+  const real = realpathSync(path);
+  const tmp = join(dirname(real), `.${basename(real)}.seats-${process.pid}`);
+  writeFileSync(tmp, text, { mode: statSync(real).mode & 0o777 });
   renameSync(tmp, real);
 }
 

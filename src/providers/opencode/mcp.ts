@@ -52,4 +52,11 @@ export const opencodeMcp: McpConfig = {
     for (const [name, server] of Object.entries(servers)) mcp[name] = toOpencode(server);
     writeJsonAtomic(file, { ...data, mcp });
   },
+  remove(file, names) {
+    const data = readJson(file);
+    const mcp = record(data.mcp);
+    if (!names.some((name) => Object.hasOwn(mcp, name))) return;
+    for (const name of names) delete mcp[name];
+    writeJsonAtomic(file, { ...data, mcp });
+  },
 };

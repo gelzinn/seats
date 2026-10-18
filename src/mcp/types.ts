@@ -22,6 +22,14 @@ export type McpConfig = {
   names: (file: string) => string[];
   /** Adds `servers` to the file without touching anything already there. */
   add: (file: string, servers: McpServers) => void;
+  /** Removes the servers named exactly as the file spells them, leaving everything else as it was. */
+  remove: (file: string, names: string[]) => void;
+  /**
+   * Each seat's own copy of `file`, for tools whose seats keep one per account
+   * that seats merges (Claude's `.claude.json`). `seats install` and
+   * `seats uninstall` change every copy, so a merge can't bring a server back.
+   */
+  seatFiles?: (home: string) => string[];
   /** Servers that belong to the tool itself and must not spread to other tools. */
   internal?: string[];
   /** Server types the tool can't run. */

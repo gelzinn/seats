@@ -3,6 +3,7 @@
 import { version } from "../package.json";
 import { addCommand } from "./commands/add.ts";
 import { healthCommand } from "./commands/health.ts";
+import { installCommand, uninstallCommand } from "./commands/install.ts";
 import { currentCommand, listCommand } from "./commands/list.ts";
 import { migrateCommand } from "./commands/migrate.ts";
 import { pickCommand, useCommand } from "./commands/switch.ts";
@@ -22,6 +23,14 @@ Usage:
                         the active one. Args after -- go to the tool's login.
   seats sync            Share config and trust between seats, and MCP servers,
                         skills and instructions across tools (--dry-run to preview)
+  seats install mcp <name> -- <command> [args...] [--env KEY=VALUE ...]
+  seats install mcp <name> --url <url> [--header "Key: Value" ...] [--sse]
+  seats install skill <folder | git-url>
+                        Add an MCP server or a skill to every installed tool
+                        (--force to replace, --dry-run to preview)
+  seats uninstall mcp|skill <name>
+                        Remove it from every tool; a server is marked so sync
+                        won't add it back (--dry-run to preview)
   seats migrate         Move ~/.<tool>-* seat folders into ~/.config/seats
                         (--dry-run to preview)
   seats help            Show this help
@@ -35,6 +44,9 @@ Examples:
   seats health
   seats add claude work
   seats add codex personal -- --device-auth
+  seats install mcp docs -- npx -y docs-mcp
+  seats install skill ./review --dry-run
+  seats uninstall mcp docs
 `;
 
 const help = async () => console.log(HELP);
@@ -50,9 +62,11 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   "-h": help,
   "--version": printVersion,
   "-v": printVersion,
+  install: installCommand,
   list: listCommand,
   migrate: migrateCommand,
   sync: syncCommand,
+  uninstall: uninstallCommand,
   use: useCommand,
 };
 

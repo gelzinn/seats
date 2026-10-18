@@ -26,12 +26,32 @@ function entries(dir: string): string[] {
   }
 }
 
-function real(path: string): string | undefined {
+export function realPath(path: string): string | undefined {
   try {
     return realpathSync(path);
   } catch {
     return undefined;
   }
+}
+
+export type ToolSkillsDir = { id: string; dir: string; native?: boolean };
+
+/**
+ * Each installed tool's skills folder, once: folders reached through a
+ * symlink (seats of one tool share theirs) and the library itself are skipped.
+ */
+export function toolSkillsDirs(home: string, targets: SkillsTarget[]): ToolSkillsDir[] {
+  const library = skillsLibrary(home);
+  const libraryKey = realPath(library) ?? library;
+  const dirs = new Map<string, ToolSkillsDir>();
+  for (const target of targets) {
+    const dir = target.dir(home);
+    if (!dir) continue;
+    const key = realPath(dir) ?? dir;
+    if (key === libraryKey || dirs.has(key)) continue;
+    dirs.set(key, { id: target.id, dir, native: target.native });
+  }
+  return [...dirs.values()];
 }
 
 /**
@@ -47,28 +67,19 @@ export function syncSkills(
 ): SkillsReport {
   const report: SkillsReport = { imported: [], linked: [], conflicts: [] };
   const library = skillsLibrary(home);
-  const libraryKey = real(library) ?? library;
   const inLibrary = new Set(entries(library));
-
-  const dirs = new Map<string, { id: string; dir: string; native?: boolean }>();
-  for (const target of targets) {
-    const dir = target.dir(home);
-    if (!dir) continue;
-    const key = real(dir) ?? dir;
-    if (key === libraryKey || dirs.has(key)) continue;
-    dirs.set(key, { id: target.id, dir, native: target.native });
-  }
+  const dirs = toolSkillsDirs(home, targets);
 
   // Only skills some tool already uses: the library may hold many more on purpose.
   // Collected before importing, since native tools' skills leave their folder.
-  const inUse = new Set([...dirs.values()].flatMap(({ dir }) => entries(dir)));
+  const inUse = new Set(dirs.flatMap(({ dir }) => entries(dir)));
 
-  for (const { id, dir, native } of dirs.values()) {
+  for (const { id, dir, native } of dirs) {
     for (const name of entries(dir)) {
       const local = join(dir, name);
       const shared = join(library, name);
       if (inLibrary.has(name)) {
-        if (lexists(shared) && real(local) !== real(shared)) report.conflicts.push(`${id}: ${name}`);
+        if (lexists(shared) && realPath(local) !== realPath(shared)) report.conflicts.push(`${id}: ${name}`);
         continue;
       }
       const isLink = isSymlink(local);
@@ -87,7 +98,7 @@ export function syncSkills(
     }
   }
 
-  for (const { id, dir, native } of dirs.values()) {
+  for (const { id, dir, native } of dirs) {
     if (native) continue;
     for (const name of inUse) {
       if (!inLibrary.has(name) || lexists(join(dir, name))) continue;

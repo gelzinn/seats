@@ -79,6 +79,8 @@ seats health             # ask every seat to reply and see which ones work
 seats add claude work    # sign a new account in, without touching the active one
 seats sync --dry-run     # preview what sync would share, add or link
 seats sync               # share config between seats and across tools
+seats install mcp docs -- npx -y docs-mcp   # add an MCP server to every tool
+seats uninstall mcp docs                    # and take it out of every tool
 seats migrate --dry-run  # preview moving ~/.<tool>-* into ~/.config/seats
 seats migrate
 seats --version          # the installed version
@@ -208,7 +210,7 @@ Only tools that are installed are touched. `CODEX_HOME`, `COPILOT_HOME`, `GEMINI
 - Servers from every tool are collected into `~/.config/seats/shared/mcp.json`, then each tool gets the ones it's missing, written in its own format: `command`/`args`/`env` or `url`/`headers`, Codex TOML tables, OpenCode `local`/`remote` entries, Gemini `httpUrl`, Antigravity `serverUrl`, Copilot `tools`.
 - Nothing a tool already has is changed. Names are compared ignoring case, and a name a tool already uses is never written again, even if seats can't read that entry.
 - Codex doesn't run SSE servers, so they're skipped there. Codex's own `node_repl` stays in Codex.
-- To keep a server out of one tool, add `"skip": ["cursor"]` to it in `mcp.json`. To remove it everywhere, delete it from your tools and set `"skip": ["*"]` so it isn't imported again.
+- To keep a server out of one tool, add `"skip": ["cursor"]` to it in `mcp.json`. To remove it everywhere, run `seats uninstall mcp <name>`: it deletes the server from your tools and sets `"skip": ["*"]` so it isn't imported again.
 - Sync warns when a server's credentials may not work in a tool it was copied to. That happens with env var references, because each tool spells them differently (`${VAR}`, `${env:VAR}`, `{env:VAR}`), and with Codex's `bearer_token_env_var`. OAuth logins are per tool, so each tool asks once.
 
 </details>
@@ -230,6 +232,29 @@ Only tools that are installed are touched. `CODEX_HOME`, `COPILOT_HOME`, `GEMINI
 - Empty files, and files with the same text (ignoring HTML comments), are linked. A file with different text is reported and left alone, so nothing you wrote is lost.
 
 </details>
+
+### Install an MCP server or skill everywhere
+
+`seats sync` spreads what your tools already have. To add something new to every installed tool in one step, use `seats install`:
+
+```bash
+seats install mcp docs -- npx -y docs-mcp
+seats install mcp docs -- npx -y docs-mcp --env TOKEN=your-token
+seats install mcp github --url https://api.example.com/mcp --header "Authorization: Bearer your-token"
+seats install mcp stream --url https://stream.example.com/sse --sse
+seats install skill ./review
+seats install skill https://github.com/you/review-skill.git
+seats uninstall mcp docs
+seats uninstall skill review
+```
+
+- **MCP servers** go into `~/.config/seats/shared/mcp.json`, then into every installed tool in its own format. Everything after `--` is the server's command, passed on unchanged, except seats' own `--env KEY=VALUE`, `--force` and `--dry-run` at the very end. They can also go before `--`. A tool that can't run the server is skipped, and the report says why. For example, Codex doesn't run SSE servers.
+- **A name that's already taken** is left alone. If a tool already has a server with that name (ignoring case), its entry is kept and reported as "already there". `--force` replaces it in every tool, every Claude seat included, and in the library. Without `--force`, a different server with that name in the library stops the install before anything is written.
+- **Skills** are copied into `~/.agents/skills/<name>`. The folder you give can be the skill itself, or contain exactly one skill folder. Git URLs are cloned with `--depth 1`. The name comes from `name:` in the SKILL.md front matter, or else from the folder name, which for a git URL is the repository name.
+- **Links to the skill** go into Claude Code, Kiro, Antigravity and Command Code. The other tools read the library themselves, so they get no link. `--force` replaces a copy already in the library, and a tool's link with that name that points somewhere else. A tool's own folder with that name is never touched.
+- **`seats uninstall mcp`** removes the server from every tool and every Claude seat. It then marks the server `"skip": ["*"]` in `mcp.json`, so `seats sync` doesn't import it again. Installing the server again clears the mark.
+- **`seats uninstall skill`** removes the links that point at the library copy, then the copy itself. A tool's own folders and links that point elsewhere are kept.
+- Add **`--dry-run`** to any of these commands to see the plan without changing anything.
 
 ## Use seats from other tools
 
@@ -294,7 +319,7 @@ Seats never signs in for you and never sends credentials anywhere. Keys stay in 
 | `src/providers/index.ts` | The list of providers; everything else reads from it |
 | `src/providers/helpers/` | Code shared by several providers (seat folders, API keys) |
 | `src/cli.ts` | Help text and routing to the commands |
-| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `add`, `health`, `sync`, `migrate` |
+| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `add`, `health`, `sync`, `install` (`install`, `uninstall`), `migrate` |
 | `src/home-dirs.ts`, `src/store.ts` | Finding and naming seat folders; the `~/.config/seats` layout and `active.env` |
 | `src/share.ts`, `src/skills.ts`, `src/instructions.ts` | Sharing files between seats, and skills and instructions across tools |
 | `src/mcp/` | The tool-neutral MCP library and the JSON helpers adapters build on |
