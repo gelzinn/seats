@@ -56,7 +56,7 @@ export async function readCodexUsage(dir: string): Promise<UsageReading> {
   if (typeof tokens.account_id === "string") headers["ChatGPT-Account-Id"] = tokens.account_id;
   try {
     const response = await fetch(USAGE_URL, { headers, signal: AbortSignal.timeout(10_000) });
-    if (response.status === 401 || response.status === 403) return { error: "expired" };
+    if (response.status === 401) return { error: "expired" };
     const usage = response.ok ? parseCodexUsage(await response.json()) : undefined;
     return usage ? { usage } : { error: "failed" };
   } catch {

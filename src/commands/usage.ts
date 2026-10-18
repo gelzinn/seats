@@ -51,9 +51,11 @@ export function resetsIn(resetsAt: Date, now = Date.now()): string {
 
 /** `82% · resets in 1h12`, yellow from 80% and red at the limit. */
 export function windowCell(window: UsageWindow, now = Date.now()): string {
-  const text = `${Math.round(window.usedPercent)}%${window.resetsAt ? ` · resets ${resetsIn(window.resetsAt, now)}` : ""}`;
-  if (window.usedPercent >= 100) return pc.red(text);
-  if (window.usedPercent >= 80) return pc.yellow(text);
+  // Colour from the shown number, so a cell that reads 80% is always yellow.
+  const percent = Math.round(window.usedPercent);
+  const text = `${percent}%${window.resetsAt ? ` · resets ${resetsIn(window.resetsAt, now)}` : ""}`;
+  if (percent >= 100) return pc.red(text);
+  if (percent >= 80) return pc.yellow(text);
   return text;
 }
 

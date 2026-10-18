@@ -61,7 +61,7 @@ export async function readClaudeUsage(dir: string): Promise<UsageReading> {
       },
       signal: AbortSignal.timeout(10_000),
     });
-    if (response.status === 401 || response.status === 403) return { error: "expired" };
+    if (response.status === 401) return { error: "expired" };
     const usage = response.ok ? parseClaudeUsage(await response.json()) : undefined;
     return usage ? { usage } : { error: "failed" };
   } catch {
