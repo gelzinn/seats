@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, readFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
-import { CONTINUE_PROMPT, copyTranscript, nextAvailable, supervise, type UsageOf } from "../../src/commands/run.ts";
+import { CONTINUE_PROMPT, activeSeat, copyTranscript, nextAvailable, supervise, type UsageOf } from "../../src/commands/run.ts";
 import { seatSourceById } from "../../src/providers/index.ts";
 import type { Seat, Usage } from "../../src/types.ts";
 import { tempHome } from "../helpers/temp-home.ts";
@@ -48,6 +48,15 @@ describe("nextAvailable", () => {
     const next = await nextAvailable(seats, seats[0]!, new Set(), usage);
     expect(next.seat).toBeUndefined();
     expect(next.resets.map((date) => date.toISOString())).toEqual(["2030-01-01T15:00:00.000Z", "2030-01-01T18:00:00.000Z"]);
+  });
+});
+
+describe("activeSeat", () => {
+  test("follows the live path to its seat, without asking the CLI anything", () => {
+    env.write(".config/seats/claude/work/.claude.json", "{}");
+    env.write(".config/seats/claude/personal/.claude.json", "{}");
+    symlinkSync(".config/seats/claude/personal", join(env.home, ".claude"));
+    expect(activeSeat(env.home, seatSourceById("claude"))).toMatchObject({ id: "claude:personal", dir: seat("personal").dir });
   });
 });
 

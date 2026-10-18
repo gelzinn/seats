@@ -4,10 +4,10 @@ import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import pc from "picocolors";
 import { isInside } from "../fs.ts";
+import { discoverSeatDirs } from "../home-dirs.ts";
 import { seatSources } from "../providers/index.ts";
 import { readConfig, seatsHome, writeConfig } from "../store.ts";
 import type { Seat, SeatSource, Usage } from "../types.ts";
-import { currentSeats } from "./list.ts";
 import { fail } from "./ui.ts";
 
 /** Sent after a mid-session switch, unless `seats auto-switch on --no-continue`. */
@@ -139,8 +139,11 @@ function watch(child: ChildProcess, marker: string, seat: Seat, usageOf: UsageOf
 export type SuperviseOptions = {
   home: string;
   source: SeatSource;
-  /** Signed-in seats of `source`, in the order to try them. */
-  seats: Seat[];
+  /**
+   * Signed-in seats of `source`, in the order to try them. A function is only
+   * called when a switch is needed, so launching stays fast.
+   */
+  seats: Seat[] | (() => Promise<Seat[]>);
   start: Seat;
   args: string[];
   /** Off: just run `start`. On: skip seats at their limit and move on mid-session. */
@@ -156,17 +159,21 @@ export type SuperviseOptions = {
  * conversation. The global active seat (`~/.claude` etc.) never changes here.
  */
 export async function supervise(options: SuperviseOptions): Promise<number> {
-  const { home, source, seats, autoSwitch } = options;
+  const { home, source, autoSwitch } = options;
+  let listed: Seat[] | undefined;
+  const seats = async () => (listed ??= Array.isArray(options.seats) ? options.seats : await options.seats());
   const usageOf: UsageOf = options.usageOf ?? (async (seat) => (seat.dir ? source.usage?.(seat.dir) : undefined));
   const { binary, configDirEnv, failover } = source;
   if (!binary || !configDirEnv) throw new Error(`seats can't launch ${source.label}.`);
 
   const tried = new Set<string>();
   let seat = options.start;
-  if (autoSwitch && source.usage) {
-    const next = await nextAvailable(seats, seat, tried, usageOf);
-    if (!next.seat) return allOut(seats, next.resets);
-    if (next.seat.id !== seat.id) say(`${seat.id} is at its usage limit. Using ${pc.bold(next.seat.id)}.`);
+  const startUsage = autoSwitch ? await usageOf(seat) : undefined;
+  if (startUsage && isLimited(startUsage)) {
+    tried.add(seat.id);
+    const next = await nextAvailable(await seats(), seat, tried, usageOf);
+    if (!next.seat) return allOut(await seats(), [...resets(startUsage), ...next.resets]);
+    say(`${seat.id} is at its usage limit. Using ${pc.bold(next.seat.id)}.`);
     seat = next.seat;
   }
 
@@ -193,8 +200,8 @@ export async function supervise(options: SuperviseOptions): Promise<number> {
       if ("code" in ended) return ended.code;
 
       tried.add(seat.id);
-      const next = await nextAvailable(seats, seat, tried, usageOf);
-      if (!next.seat) return allOut(seats, next.resets);
+      const next = await nextAvailable(await seats(), seat, tried, usageOf);
+      if (!next.seat) return allOut(await seats(), next.resets);
       const { session_id: session, transcript_path: transcript } = ended.limit;
       if (!session || !transcript || !copyTranscript(transcript, seat.dir!, next.seat.dir!)) {
         say(pc.yellow(`${seat.id} hit its usage limit, but its session couldn't be moved. Starting fresh on ${next.seat.id}.`));
@@ -213,17 +220,23 @@ export async function supervise(options: SuperviseOptions): Promise<number> {
 }
 
 function allOut(seats: Seat[], resetTimes: Date[]): number {
-  const when = resetTimes[0] ? ` The first one resets ${time(resetTimes[0])}.` : "";
+  const first = [...resetTimes].sort((a, b) => +a - +b)[0];
+  const when = first ? ` The first one resets ${time(first)}.` : "";
   say(pc.yellow(`All ${seats.length} ${seats.length === 1 ? "seat is" : "seats are"} at their usage limit.${when}`));
   return 1;
 }
 
-/** Signed-in seats of a CLI and the one its live path points at (else the first). */
-export async function seatsOf(home: string, source: SeatSource): Promise<{ seats: Seat[]; active?: Seat }> {
-  const seats = await source.discover(home);
-  const current = currentSeats(home).find((item) => item.livePath === source.livePath?.(home));
-  const active = seats.find((seat) => seat.dir && current?.targetPath && real(seat.dir) === real(current.targetPath));
-  return { seats, active: active ?? seats[0] };
+/**
+ * The seat a CLI's live path points at (else its first seat), found from the
+ * folders alone: no CLI is asked whether it's signed in, so this is instant.
+ */
+export function activeSeat(home: string, source: SeatSource): Seat | undefined {
+  const live = source.livePath?.(home);
+  if (!live) return undefined;
+  const dirs = discoverSeatDirs(home, source.id, basename(live));
+  const found = dirs.find((item) => real(item.dir) === real(live)) ?? dirs[0];
+  if (!found) return undefined;
+  return { id: `${source.id}:${found.slug}`, source: source.id, provider: source.id, kind: "cli", label: found.label, dir: found.dir, signedIn: true };
 }
 
 /** `seats run <tool> [args…]`: the active seat of `tool`, supervised when auto-switch is on. */
@@ -233,13 +246,14 @@ export async function runCommand([tool, ...args]: string[]): Promise<void> {
   if (!tool) fail(`Name the tool to run: ${names}.`);
   const source = runnable.find((item) => item.id === tool) ?? fail(`seats can't run "${tool}". Try one of: ${names}.`);
   const home = homedir();
-  const { seats, active } = await seatsOf(home, source);
-  if (!active) fail(`No signed-in ${source.label} seat. Add one with seats add ${source.id}.`);
+  const active = activeSeat(home, source);
+  if (!active) fail(`No ${source.label} seat. Add one with seats add ${source.id}.`);
   const config = readConfig(home);
   process.exitCode = await supervise({
     home,
     source,
-    seats,
+    // Asking every seat whether it's signed in is slow; only needed to switch.
+    seats: () => source.discover(home),
     start: active,
     args,
     autoSwitch: config.autoSwitch === true,
