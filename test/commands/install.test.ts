@@ -28,6 +28,7 @@ const SEARCH: McpServer = {
 
 /** Every MCP tool seats knows, installed with a little unrelated config of its own. */
 function installTools(): void {
+  env.write(".claude/.keep", "");
   env.write(".claude.json", { userID: "someone" });
   env.write(".codex/config.toml", CODEX);
   env.write(".cursor/mcp.json", { mcpServers: { github: { url: "https://api.example.com/mcp" } } });
@@ -211,6 +212,7 @@ describe("uninstallMcp", () => {
     env.write(".config/seats/claude/work/.claude.json", { projects: {} });
     env.write(".config/seats/claude/personal/.claude.json", { projects: {} });
     env.write(".config/seats/claude/broken/.claude.json", "{ not json");
+    symlinkSync(".config/seats/claude/work", join(env.home, ".claude"));
     symlinkSync(".config/seats/claude/work/.claude.json", join(env.home, ".claude.json"));
 
     expect(statuses(installMcp(env.home, "docs", DOCS, { adapters })).claude).toBe("added");

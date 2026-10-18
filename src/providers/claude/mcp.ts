@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { discoverSeatDirs } from "../../home-dirs.ts";
-import { commonShape, configFile, jsonMcp, readJson } from "../../mcp/json.ts";
+import { commonShape, jsonMcp, readJson } from "../../mcp/json.ts";
 import type { McpConfig } from "../../mcp/types.ts";
 
 /** Seats skip a `.claude.json` that doesn't parse, as merging them does. */
@@ -17,7 +17,8 @@ function parses(file: string): boolean {
 /** `~/.claude.json` → `mcpServers`. */
 export const claudeMcp: McpConfig = {
   ...jsonMcp({
-    file: (home) => configFile(home, ".claude.json"),
+    // ~/.claude.json sits in HOME itself, so look for ~/.claude to tell whether Claude Code is installed.
+    file: (home) => (existsSync(join(home, ".claude")) ? join(home, ".claude.json") : undefined),
     // A remote entry without `type` is rejected; `cwd` isn't documented.
     toTool: (server) => commonShape(server, { typed: true, cwd: false }),
   }),

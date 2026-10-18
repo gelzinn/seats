@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { claudeMcp } from "../../src/providers/claude/mcp.ts";
 import { cursorMcp } from "../../src/providers/cursor/mcp.ts";
 import { opencodeMcp } from "../../src/providers/opencode/mcp.ts";
 import { tempHome } from "../helpers/temp-home.ts";
@@ -44,5 +46,14 @@ describe("opencodeMcp remove", () => {
       $schema: "https://opencode.ai/config.json",
       mcp: { github: { type: "remote", url: "https://api.example.com/mcp" } },
     });
+  });
+});
+
+describe("claudeMcp", () => {
+  test("isn't installed without ~/.claude, so ~/.claude.json is never created for others", () => {
+    env = tempHome();
+    expect(claudeMcp.file(env.home)).toBeUndefined();
+    env.write(".claude/settings.json", "{}");
+    expect(claudeMcp.file(env.home)).toBe(join(env.home, ".claude.json"));
   });
 });
