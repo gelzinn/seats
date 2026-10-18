@@ -6,6 +6,7 @@ import {
   CONTINUE_PROMPT,
   copyTranscript,
   nextAvailable,
+  seatToRun,
   supervise,
   type UsageOf,
 } from "../../src/commands/run.ts";
@@ -76,6 +77,33 @@ describe("activeSeat", () => {
       id: "claude:personal",
       dir: seat("personal").dir,
     });
+  });
+});
+
+describe("seatToRun", () => {
+  const claude = seatSourceById("claude");
+
+  test("starts the seat a .seats file pins, else the active one, without moving the live path", () => {
+    env.write(".config/seats/claude/work/.claude.json", "{}");
+    env.write(".config/seats/claude/acme/.claude.json", "{}");
+    symlinkSync(".config/seats/claude/work", join(env.home, ".claude"));
+    const file = env.write("clients/acme/.seats", 'claude = "acme"\n');
+
+    const pinned = seatToRun(env.home, claude, join(env.home, "clients/acme/src"));
+    expect(pinned.seat).toMatchObject({ id: "claude:acme", dir: seat("acme").dir });
+    expect(pinned.pin?.file).toBe(file);
+    expect(seatToRun(env.home, claude, join(env.home, "elsewhere"))).toEqual({
+      seat: expect.objectContaining({ id: "claude:work" }),
+    });
+    expect(activeSeat(env.home, claude)?.id).toBe("claude:work");
+  });
+
+  test("fails on a pin to a seat that doesn't exist, instead of using another account", () => {
+    env.write(".config/seats/claude/work/.claude.json", "{}");
+    env.write("clients/acme/.seats", 'claude = "acme"\n');
+    expect(() => seatToRun(env.home, claude, join(env.home, "clients/acme"))).toThrow(
+      "pins claude:acme, but there's no such seat. See seats list claude.",
+    );
   });
 });
 
