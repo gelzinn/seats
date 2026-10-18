@@ -9,7 +9,17 @@ export type McpServer = {
   headers?: Record<string, string>;
   /** Tool ids this server is never written to. `["*"]` keeps it out of every tool. */
   skip?: string[];
+  /**
+   * Extra fields for one tool, by tool id, written into that tool's entry as
+   * is, e.g. `{ codex: { startup_timeout_sec: 30 } }`. Kept in the library.
+   */
+  tools?: Record<string, ToolOptions>;
+  /** This tool's `tools` entry, set only on the copy handed to one adapter's `add`. */
+  options?: ToolOptions;
 };
+
+export type ToolOptionValue = string | number | boolean | string[];
+export type ToolOptions = Record<string, ToolOptionValue>;
 
 export type McpServers = Record<string, McpServer>;
 
@@ -20,7 +30,10 @@ export type McpConfig = {
   read: (file: string) => McpServers;
   /** Every server name in the file, including entries `read` can't convert. */
   names: (file: string) => string[];
-  /** Adds `servers` to the file without touching anything already there. */
+  /**
+   * Adds `servers` to the file without touching anything already there. Each
+   * server's `options` (if any) go into its entry too, overriding seats' own fields.
+   */
   add: (file: string, servers: McpServers) => void;
   /** Removes the servers named exactly as the file spells them, leaving everything else as it was. */
   remove: (file: string, names: string[]) => void;

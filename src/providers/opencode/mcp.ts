@@ -49,7 +49,7 @@ export const opencodeMcp: McpConfig = {
   add(file, servers) {
     const data = readJson(file);
     const mcp = record(data.mcp);
-    for (const [name, server] of Object.entries(servers)) mcp[name] = toOpencode(server);
+    for (const [name, server] of Object.entries(servers)) mcp[name] = { ...toOpencode(server), ...server.options };
     writeJsonAtomic(file, { ...data, mcp });
   },
   remove(file, names) {

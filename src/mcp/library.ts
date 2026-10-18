@@ -27,6 +27,16 @@ export type McpSyncReport = {
 
 const lower = (name: string) => name.toLowerCase();
 
+/** The copies of `servers` handed to one tool: its `tools` entry as `options`, nobody else's. */
+export function forTool(servers: McpServers, toolId: string): McpServers {
+  return Object.fromEntries(
+    Object.entries(servers).map(([name, { tools, options: _, ...server }]) => [
+      name,
+      tools?.[toolId] ? { ...server, options: tools[toolId] } : server,
+    ]),
+  );
+}
+
 /** `${VAR}`, `$VAR`, `{env:VAR}`: every tool spells env references differently. */
 export const usesEnvRefs = (server: McpServer) =>
   Object.values({ ...server.env, ...server.headers }).some((value) =>
@@ -82,7 +92,7 @@ export function syncMcp(
       ),
     );
     if (Object.keys(missing).length === 0) continue;
-    if (!dryRun) adapter.add(file, missing);
+    if (!dryRun) adapter.add(file, forTool(missing, adapter.id));
     report.added.push(...Object.keys(missing).map((name) => `${adapter.id}: ${name}`));
     for (const [name, server] of Object.entries(missing)) {
       if (usesEnvRefs(server)) report.warnings.push(`${adapter.id}: ${name} (env var syntax differs)`);

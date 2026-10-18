@@ -55,7 +55,7 @@ export function jsonMcp(options: {
     add(file, servers) {
       const data = readJson(file);
       const current = record(data[key]);
-      for (const [name, server] of Object.entries(servers)) current[name] = options.toTool(server);
+      for (const [name, server] of Object.entries(servers)) current[name] = { ...options.toTool(server), ...server.options };
       writeJsonAtomic(file, { ...data, [key]: current });
     },
     remove(file, names) {

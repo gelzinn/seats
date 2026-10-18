@@ -6,8 +6,8 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { isInside, isSymlink, lexists, readLink, replaceSymlink, writeJsonAtomic } from "../fs.ts";
 import { compact } from "../mcp/convert.ts";
-import { libraryFile, readLibrary, usesEnvRefs } from "../mcp/library.ts";
-import type { McpAdapter, McpServer } from "../mcp/types.ts";
+import { forTool, libraryFile, readLibrary, usesEnvRefs } from "../mcp/library.ts";
+import type { McpAdapter, McpServer, ToolOptions, ToolOptionValue } from "../mcp/types.ts";
 import { mcpAdapters, skillsTargets } from "../providers/index.ts";
 import { realPath, skillsLibrary, toolSkillsDirs, type SkillsTarget } from "../skills.ts";
 import { fail, intro, table, tilde } from "./ui.ts";
@@ -15,24 +15,30 @@ import { fail, intro, table, tilde } from "./ui.ts";
 const INSTALL_USAGE = `Install an MCP server or a skill into every tool you have installed.
 
 Usage:
-  seats install mcp <name> -- <command> [args...] [--env KEY=VALUE ...]
-  seats install mcp <name> --url <url> [--header "Key: Value" ...] [--sse]
-  seats install skill <folder | git-url>
+  seats install mcp <name> [--set tool.key=value ...] -- <command> [args...] [--env KEY=VALUE ...]
+  seats install mcp <name> --url <url> [--header "Key: Value" ...] [--sse] [--set tool.key=value ...]
+  seats install skill <folder | git-url> [--skill <name>]
   seats uninstall mcp <name>
   seats uninstall skill <name>
 
 Options:
-  --force     Replace a server or skill that is already there
-  --dry-run   Show what would change without changing anything
+  --set tool.key=value  Add a field to one tool's entry only, e.g.
+                        codex.startup_timeout_sec=30. Numbers, true/false
+                        and JSON string arrays keep their type. Repeatable.
+  --skill <name>        Pick one skill when the folder or repo holds several
+  --force               Replace a server or skill that is already there
+  --dry-run             Show what would change without changing anything
 
 After --, the server's command and args are passed on as is, except
 --env KEY=VALUE, --force and --dry-run at the very end, which are seats'.
 
 Examples:
   seats install mcp docs -- npx -y docs-mcp --env TOKEN=your-token
+  seats install mcp docs --set codex.startup_timeout_sec=30 -- npx -y docs-mcp
   seats install mcp github --url https://api.example.com/mcp --header "Authorization: Bearer your-token"
   seats install skill ./review
   seats install skill https://github.com/you/review-skill.git
+  seats install skill https://github.com/you/skills.git --skill review
   seats uninstall mcp docs`;
 
 /** What happened, or in a dry run would happen, in the library or in one tool. */
@@ -112,7 +118,7 @@ function installInTool(
     if (!dryRun) {
       for (const { file, names } of present) {
         if (names.length > 0) adapter.remove(file, names);
-        adapter.add(file, { [name]: server });
+        adapter.add(file, forTool({ [name]: server }, adapter.id));
       }
     }
     return { ...base, status: has ? "replaced" : "added" };
@@ -215,15 +221,38 @@ function frontMatterName(folder: string): string | undefined {
   return value?.replace(/^(["'])(.*)\1$/, "$2") || undefined;
 }
 
-/** The skill folder: `dir` itself when it has a SKILL.md, else its only subfolder that does. */
-function findSkillFolder(dir: string, label: string): string {
-  if (existsSync(join(dir, SKILL_FILE))) return dir;
-  const found = readdirSync(dir)
-    .filter((entry) => !entry.startsWith(".") && existsSync(join(dir, entry, SKILL_FILE)))
+const SKIPPED_FOLDERS = new Set([".git", "node_modules"]);
+const SEARCH_DEPTH = 5;
+
+/**
+ * Every skill folder under `dir`, however deep repos keep them (`skills/x`,
+ * `.agents/skills/x`, …). A skill's own subfolders aren't searched, nor are
+ * `.git` and `node_modules`; symlinked folders aren't followed.
+ */
+function findSkills(dir: string, depth = 0): string[] {
+  if (existsSync(join(dir, SKILL_FILE))) return [dir];
+  if (depth >= SEARCH_DEPTH) return [];
+  const folders = readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !SKIPPED_FOLDERS.has(entry.name))
+    .map((entry) => entry.name)
     .sort();
-  if (found.length === 1) return join(dir, found[0]!);
-  if (found.length === 0) throw new Error(`No ${SKILL_FILE} in ${label} or in its subfolders.`);
-  throw new Error(`${label} holds several skills (${found.join(", ")}). Point at one of them.`);
+  return folders.flatMap((name) => findSkills(join(dir, name), depth + 1));
+}
+
+const skillName = (folder: string) => frontMatterName(folder) ?? basename(folder);
+
+/** The skill to install: the only one found, or the one `wanted` names. */
+function pickSkill(dir: string, label: string, wanted: string | undefined): string {
+  const found = findSkills(dir);
+  if (found.length === 0) throw new Error(`No ${SKILL_FILE} in ${label}.`);
+  const names = found.map(skillName).join(", ");
+  if (wanted) {
+    const match = found.find((folder) => skillName(folder) === wanted || basename(folder) === wanted);
+    if (!match) throw new Error(`${label} has no skill named ${wanted}. It has: ${names}.`);
+    return match;
+  }
+  if (found.length === 1) return found[0]!;
+  throw new Error(`${label} holds ${found.length} skills: ${names}. Pick one with --skill <name>.`);
 }
 
 /** `https://…`, `ssh://…`, `git://…`, `file://…`, or scp-style `git@host:org/repo`. */
@@ -252,7 +281,8 @@ function linksTo(link: string, target: string): boolean {
   return resolve(realPath(dirname(link)) ?? dirname(link), raw) === target;
 }
 
-export type SkillOptions = { dryRun?: boolean; force?: boolean; targets?: SkillsTarget[] };
+export type SkillOptions = { dryRun?: boolean; force?: boolean; targets?: SkillsTarget[]; skill?: string };
+type ResolvedSkillOptions = Required<Omit<SkillOptions, "skill">> & { skill?: string };
 
 /** Links the library entry into every tool that doesn't read the library itself. */
 function linkSkill(home: string, name: string, targets: SkillsTarget[], { dryRun, force }: { dryRun: boolean; force: boolean }): Outcome[] {
@@ -280,9 +310,9 @@ function copySkill(from: string, to: string): void {
   cpSync(from, to, { recursive: true, dereference: true, filter: (path) => basename(path) !== ".git" });
 }
 
-function installSkillFrom(home: string, dir: string, label: string, options: Required<SkillOptions>): { name: string; outcomes: Outcome[] } {
-  const folder = findSkillFolder(dir, label);
-  const name = frontMatterName(folder) ?? basename(folder);
+function installSkillFrom(home: string, dir: string, label: string, options: ResolvedSkillOptions): { name: string; outcomes: Outcome[] } {
+  const folder = pickSkill(dir, label, options.skill);
+  const name = skillName(folder);
   if (!SKILL_NAME.test(name)) {
     throw new Error(`"${name}" can't name a skill folder. Use letters, numbers, dots, dashes and underscores.`);
   }
@@ -304,15 +334,16 @@ function installSkillFrom(home: string, dir: string, label: string, options: Req
 /**
  * Copies a skill (a local folder or a git repo) into `~/.agents/skills`, then
  * links it into every tool that doesn't read that library itself. The skill
- * is named by `name:` in its SKILL.md front matter, else by its folder (for a
- * repo whose root is the skill, the repo name).
+ * can sit anywhere in the folder or repo; when there are several, `skill`
+ * picks one. It is named by `name:` in its SKILL.md front matter, else by its
+ * folder (for a repo whose root is the skill, the repo name).
  */
 export function installSkill(
   home: string,
   source: string,
-  { dryRun = false, force = false, targets = skillsTargets }: SkillOptions = {},
+  { dryRun = false, force = false, targets = skillsTargets, skill }: SkillOptions = {},
 ): { name: string; outcomes: Outcome[] } {
-  const options = { dryRun, force, targets };
+  const options = { dryRun, force, targets, skill };
   if (existsSync(source)) {
     if (!statSync(source).isDirectory()) throw new Error(`${source} isn't a folder.`);
     return installSkillFrom(home, resolve(source), source, options);
@@ -445,11 +476,39 @@ function trailingFlags(command: string[]): { command: string[]; flags: string[];
   }
 }
 
+const OPTION_KEY = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+
+/** `30` → 30, `true` → true, `["a","b"]` → array, anything else stays a string. */
+function optionValue(raw: string): ToolOptionValue {
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (typeof value === "number" || typeof value === "boolean") return value;
+    if (Array.isArray(value) && value.every((item) => typeof item === "string")) return value;
+  } catch {
+    // not JSON: a plain string
+  }
+  return raw;
+}
+
+/** `--set codex.startup_timeout_sec=30` values, grouped by tool. Tools must be ones seats writes. */
+function toolOptions(values: string[] | undefined, toolIds: string[]): Record<string, ToolOptions> | undefined {
+  if (!values) return undefined;
+  const tools: Record<string, ToolOptions> = {};
+  for (const item of values) {
+    const match = /^([a-z0-9-]+)\.([^=]+)=(.*)$/s.exec(item);
+    if (!match || !OPTION_KEY.test(match[2]!)) throw new Error(`Expected --set tool.key=value, got "${item}".`);
+    const [, tool, key, raw] = match as unknown as [string, string, string, string];
+    if (!toolIds.includes(tool)) throw new Error(`--set ${tool}: seats doesn't write MCP config for "${tool}". Use one of ${toolIds.join(", ")}.`);
+    (tools[tool] ??= {})[key] = optionValue(raw);
+  }
+  return tools;
+}
+
 export type McpRequest = { name: string; server: McpServer; force: boolean; dryRun: boolean };
 
 /** `seats install mcp …` arguments, or an error saying what's wrong. */
 export function parseInstallMcp(argv: string[]): McpRequest {
-  const args = parseArgs(argv, { flags: ["--force", "--dry-run", "--sse"], options: ["--env", "--url", "--header"] });
+  const args = parseArgs(argv, { flags: ["--force", "--dry-run", "--sse"], options: ["--env", "--url", "--header", "--set"] });
   const name = oneName(args, "MCP server");
   if (!SERVER_NAME.test(name)) {
     throw new Error(`"${name}" can't name an MCP server in every tool. Use letters, numbers, dashes and underscores.`);
@@ -460,6 +519,7 @@ export function parseInstallMcp(argv: string[]): McpRequest {
   const command = args.command && trailing.command;
   const urls = options["--url"];
   const request = { name, force: flags.has("--force"), dryRun: flags.has("--dry-run") };
+  const tools = toolOptions(options["--set"], mcpAdapters.map((adapter) => adapter.id));
 
   if (command && urls) throw new Error("Give either a command after -- or --url, not both.");
   if (command) {
@@ -468,7 +528,7 @@ export function parseInstallMcp(argv: string[]): McpRequest {
     const envPairs = [...(options["--env"] ?? []), ...trailing.env];
     const env = pairs(envPairs.length > 0 ? envPairs : undefined, "=", "--env KEY=VALUE", ENV_KEY);
     const rest = command.length > 1 ? command.slice(1) : undefined;
-    return { ...request, server: compact({ type: "stdio", command: command[0], args: rest, env }) };
+    return { ...request, server: compact({ type: "stdio", command: command[0], args: rest, env, tools }) };
   }
   if (!urls) throw new Error("Give the server's command after --, or its --url.");
   if (urls.length > 1) throw new Error("Give --url once.");
@@ -478,7 +538,7 @@ export function parseInstallMcp(argv: string[]): McpRequest {
     throw new Error(`"${url}" isn't an http(s) URL.`);
   }
   const headers = pairs(options["--header"], ":", '--header "Key: Value"', /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/);
-  return { ...request, server: compact({ type: flags.has("--sse") ? "sse" : "http", url, headers }) };
+  return { ...request, server: compact({ type: flags.has("--sse") ? "sse" : "http", url, headers, tools }) };
 }
 
 // ---------------------------------------------------------------------------
@@ -537,10 +597,13 @@ export async function installCommand(argv: string[]): Promise<void> {
     if (usesEnvRefs(request.server)) p.log.warn("Each tool spells env var references differently. Check them in each tool.");
     return printOutcomes(`Installing MCP server ${pc.cyan(request.name)}`, outcomes, request.dryRun);
   }
-  const args = orFail(() => parseArgs(rest, { flags: ["--force", "--dry-run"] }));
+  const args = orFail(() => parseArgs(rest, { flags: ["--force", "--dry-run"], options: ["--skill"] }));
   const source = orFail(() => oneName(args, "skill folder or git URL"));
   const dryRun = args.flags.has("--dry-run");
-  const { name, outcomes } = orFail(() => installSkill(home, source, { dryRun, force: args.flags.has("--force") }));
+  const skills = args.options["--skill"];
+  if (skills && skills.length > 1) fail("Give --skill once.");
+  const options = { dryRun, force: args.flags.has("--force"), skill: skills?.[0] };
+  const { name, outcomes } = orFail(() => installSkill(home, source, options));
   printOutcomes(`Installing skill ${pc.cyan(name)}`, outcomes, dryRun);
 }
 

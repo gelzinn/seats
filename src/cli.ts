@@ -25,9 +25,10 @@ Usage:
                         skills and instructions across tools (--dry-run to preview)
   seats install mcp <name> -- <command> [args...] [--env KEY=VALUE ...]
   seats install mcp <name> --url <url> [--header "Key: Value" ...] [--sse]
-  seats install skill <folder | git-url>
+  seats install skill <folder | git-url> [--skill <name>]
                         Add an MCP server or a skill to every installed tool
-                        (--force to replace, --dry-run to preview)
+                        (--set tool.key=value for one tool's entry, --force to
+                        replace, --dry-run to preview)
   seats uninstall mcp|skill <name>
                         Remove it from every tool; a server is marked so sync
                         won't add it back (--dry-run to preview)

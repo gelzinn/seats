@@ -24,17 +24,21 @@ function servers(file: string): Json {
 
 /** One `[mcp_servers.<name>]` table. Stdio and HTTP fields never mix, which Codex rejects. */
 function toTable(name: string, server: McpServer): string {
-  const lines = [`[mcp_servers.${tomlKey(name)}]`];
-  if (server.type === "stdio") {
-    lines.push(`command = ${tomlValue(server.command!)}`);
-    if (server.args) lines.push(`args = ${tomlValue(server.args)}`);
-    if (server.cwd) lines.push(`cwd = ${tomlValue(server.cwd)}`);
-    if (server.env) lines.push(`env = ${tomlTable(server.env)}`);
-  } else {
-    lines.push(`url = ${tomlValue(server.url!)}`);
-    if (server.headers) lines.push(`http_headers = ${tomlTable(server.headers)}`);
+  const fields: Record<string, string | undefined> =
+    server.type === "stdio"
+      ? {
+          command: tomlValue(server.command!),
+          args: server.args && tomlValue(server.args),
+          cwd: server.cwd && tomlValue(server.cwd),
+          env: server.env && tomlTable(server.env),
+        }
+      : { url: tomlValue(server.url!), http_headers: server.headers && tomlTable(server.headers) };
+  // Options override seats' own fields rather than repeat a key, which TOML rejects.
+  for (const [key, value] of Object.entries(server.options ?? {})) {
+    fields[key] = typeof value === "string" || Array.isArray(value) ? tomlValue(value) : String(value);
   }
-  return lines.join("\n");
+  const lines = Object.entries(fields).flatMap(([key, value]) => (value === undefined ? [] : [`${tomlKey(key)} = ${value}`]));
+  return [`[mcp_servers.${tomlKey(name)}]`, ...lines].join("\n");
 }
 
 /** A parsed config without `names`, and without `mcp_servers` once it's empty. */

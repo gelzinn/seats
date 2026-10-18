@@ -323,10 +323,38 @@ describe("installSkill", () => {
     writeSkill("evil/skill", "---\nname: ../../outside\n---\n");
 
     expect(() => installSkill(env.home, join(env.home, "empty"))).toThrow("No SKILL.md");
-    expect(() => installSkill(env.home, join(env.home, "many"))).toThrow("several skills (one, two)");
+    expect(() => installSkill(env.home, join(env.home, "many"))).toThrow(
+      "holds 2 skills: one, two. Pick one with --skill <name>.",
+    );
     expect(() => installSkill(env.home, join(env.home, "evil"))).toThrow("can't name a skill folder");
     expect(() => installSkill(env.home, "not-a-folder")).toThrow("isn't a folder or a git URL");
     expect(existsSync(join(env.home, ".agents"))).toBe(false);
+  });
+
+  test("finds skills however deep a repo keeps them, and --skill picks one", () => {
+    env = tempHome();
+    installSkillTools();
+    writeSkill("repo/.agents/skills/review", "---\nname: review\n---\n");
+    writeSkill("repo/.agents/skills/deploy");
+    // A skill's own subfolders aren't more skills, and node_modules is never searched.
+    writeSkill("repo/.agents/skills/review/references/example");
+    writeSkill("repo/node_modules/some-package/skill");
+    const repo = join(env.home, "repo");
+
+    expect(() => installSkill(env.home, repo)).toThrow("holds 2 skills: deploy, review. Pick one with --skill <name>.");
+    expect(() => installSkill(env.home, repo, { skill: "missing" })).toThrow("has no skill named missing. It has: deploy, review.");
+
+    const { name } = installSkill(env.home, repo, { skill: "review" });
+    expect(name).toBe("review");
+    expect(readFileSync(join(env.home, ".claude/skills/review/SKILL.md"), "utf8")).toContain("# Review");
+    expect(existsSync(join(env.home, ".agents/skills/deploy"))).toBe(false);
+  });
+
+  test("installs the only skill in a repo without --skill", () => {
+    env = tempHome();
+    installSkillTools();
+    writeSkill("repo/skills/review");
+    expect(installSkill(env.home, join(env.home, "repo")).name).toBe("review");
   });
 
   test.skipIf(!Bun.which("git"))("clones a git repo and names the skill after it", () => {
@@ -412,7 +440,65 @@ describe("uninstallSkill", () => {
   });
 });
 
+describe("tool options (--set)", () => {
+  const codexToml = () => Bun.TOML.parse(readFileSync(join(env.home, ".codex/config.toml"), "utf8")) as any;
+
+  test("go only into the named tool, in its format, and stay in the library", () => {
+    env = tempHome();
+    installTools();
+    const server: McpServer = {
+      ...DOCS,
+      tools: { codex: { startup_timeout_sec: 30 }, copilot: { tools: ["docs_search"] } },
+    };
+
+    installMcp(env.home, "docs", server, { adapters: mcpAdapters });
+
+    expect(codexToml().mcp_servers.docs.startup_timeout_sec).toBe(30);
+    expect(json(".copilot/mcp-config.json").mcpServers.docs.tools).toEqual(["docs_search"]);
+    expect(json(".cursor/mcp.json").mcpServers.docs.startup_timeout_sec).toBeUndefined();
+    expect(json(".cursor/mcp.json").mcpServers.docs.options).toBeUndefined();
+    expect(readLibrary(env.home).docs?.tools).toEqual(server.tools);
+    expect(readLibrary(env.home).docs?.options).toBeUndefined();
+  });
+
+  test("survive --force and reach tools that seats sync fills in later", () => {
+    env = tempHome();
+    installTools();
+    const server: McpServer = { ...DOCS, tools: { codex: { startup_timeout_sec: 30 } } };
+    installMcp(env.home, "docs", server, { adapters: mcpAdapters.filter((adapter) => adapter.id !== "codex") });
+
+    syncMcp(env.home, { adapters: mcpAdapters });
+    expect(codexToml().mcp_servers.docs.startup_timeout_sec).toBe(30);
+
+    installMcp(env.home, "docs", server, { adapters: mcpAdapters, force: true });
+    expect(codexToml().mcp_servers.docs).toEqual({ command: "npx", args: ["-y", "docs-mcp"], env: { TOKEN: "t" }, startup_timeout_sec: 30 });
+  });
+});
+
 describe("parseInstallMcp", () => {
+  test("reads --set tool.key=value, keeping numbers, booleans and string arrays typed", () => {
+    const { server } = parseInstallMcp([
+      "docs",
+      "--set",
+      "codex.startup_timeout_sec=30",
+      "--set=copilot.tools=[\"docs_search\"]",
+      "--set",
+      "gemini.trust=true",
+      "--set",
+      "cursor.note=a=b",
+      "--",
+      "docs-mcp",
+    ]);
+    expect(server.tools).toEqual({
+      codex: { startup_timeout_sec: 30 },
+      copilot: { tools: ["docs_search"] },
+      gemini: { trust: true },
+      cursor: { note: "a=b" },
+    });
+    expect(() => parseInstallMcp(["docs", "--set", "codex=30", "--", "docs-mcp"])).toThrow("Expected --set tool.key=value");
+    expect(() => parseInstallMcp(["docs", "--set", "acme.timeout=3", "--", "docs-mcp"])).toThrow('doesn\'t write MCP config for "acme"');
+  });
+
   test("reads a local server; the server's own args after -- stay as they are", () => {
     expect(parseInstallMcp(["docs", "--env", "TOKEN=a=b", "--dry-run", "--", "npx", "-y", "docs-mcp", "--env", "prod"])).toEqual({
       name: "docs",

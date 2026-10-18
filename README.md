@@ -242,15 +242,18 @@ seats install mcp docs -- npx -y docs-mcp
 seats install mcp docs -- npx -y docs-mcp --env TOKEN=your-token
 seats install mcp github --url https://api.example.com/mcp --header "Authorization: Bearer your-token"
 seats install mcp stream --url https://stream.example.com/sse --sse
+seats install mcp docs --set codex.startup_timeout_sec=30 -- npx -y docs-mcp
 seats install skill ./review
 seats install skill https://github.com/you/review-skill.git
+seats install skill https://github.com/you/tools.git --skill review
 seats uninstall mcp docs
 seats uninstall skill review
 ```
 
 - **MCP servers** go into `~/.config/seats/shared/mcp.json`, then into every installed tool in its own format. Everything after `--` is the server's command, passed on unchanged, except seats' own `--env KEY=VALUE`, `--force` and `--dry-run` at the very end. They can also go before `--`. A tool that can't run the server is skipped, and the report says why. For example, Codex doesn't run SSE servers.
+- **Options for one tool** go in with `--set <tool>.<key>=<value>`, repeatable. The field is written only into that tool's entry, in its format, and overrides seats' own field with the same name. For example, `--set codex.startup_timeout_sec=30` gives a slow-starting server more time in Codex, and `--set copilot.tools='["search"]'` limits the tools Copilot exposes. Numbers, `true`/`false` and JSON string arrays keep their type. The options are saved with the server in `mcp.json`, so `--force` and `seats sync` write them again.
 - **A name that's already taken** is left alone. If a tool already has a server with that name (ignoring case), its entry is kept and reported as "already there". `--force` replaces it in every tool, every Claude seat included, and in the library. Without `--force`, a different server with that name in the library stops the install before anything is written.
-- **Skills** are copied into `~/.agents/skills/<name>`. The folder you give can be the skill itself, or contain exactly one skill folder. Git URLs are cloned with `--depth 1`. The name comes from `name:` in the SKILL.md front matter, or else from the folder name, which for a git URL is the repository name.
+- **Skills** are copied into `~/.agents/skills/<name>`. The folder or repo you give can be the skill itself, or keep it anywhere inside, like `skills/<name>` or `.agents/skills/<name>`. When it holds several, seats lists them and `--skill <name>` picks one. Git URLs are cloned with `--depth 1`. The name comes from `name:` in the SKILL.md front matter, or else from the folder name, which for a git URL is the repository name.
 - **Links to the skill** go into Claude Code, Kiro, Antigravity and Command Code. The other tools read the library themselves, so they get no link. `--force` replaces a copy already in the library, and a tool's link with that name that points somewhere else. A tool's own folder with that name is never touched.
 - **`seats uninstall mcp`** removes the server from every tool and every Claude seat. It then marks the server `"skip": ["*"]` in `mcp.json`, so `seats sync` doesn't import it again. Installing the server again clears the mark.
 - **`seats uninstall skill`** removes the links that point at the library copy, then the copy itself. A tool's own folders and links that point elsewhere are kept.
