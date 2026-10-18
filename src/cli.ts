@@ -7,6 +7,7 @@ import { installCommand, uninstallCommand } from "./commands/install.ts";
 import { currentCommand, listCommand } from "./commands/list.ts";
 import { migrateCommand } from "./commands/migrate.ts";
 import { autoSwitchCommand, hookCommand, runCommand } from "./commands/run.ts";
+import { moveCommand, sessionsCommand } from "./commands/sessions.ts";
 import { pickCommand, useCommand } from "./commands/switch.ts";
 import { syncCommand } from "./commands/sync.ts";
 
@@ -26,6 +27,12 @@ Usage:
                         to the next seat with --resume
   seats health [tool|id]
                         Ask each signed-in seat to reply and show which work
+  seats sessions [tool|id] [--all]
+                        Conversations from every Claude seat, newest first:
+                        this folder's, or every project's with --all
+  seats move <session> <seat>
+                        Copy a conversation to another seat (the original
+                        stays) and offer to reopen it there (--force to replace)
   seats add [tool] [name]
                         Sign a new account in (claude | codex) without touching
                         the active one. Args after -- go to the tool's login.
@@ -54,6 +61,8 @@ Examples:
   seats health
   seats run claude --continue
   seats auto-switch on
+  seats sessions --all
+  seats move 3f2a claude:work
   seats add claude work
   seats add codex personal -- --device-auth
   seats install mcp docs -- npx -y docs-mcp
@@ -79,7 +88,9 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   install: installCommand,
   list: listCommand,
   migrate: migrateCommand,
+  move: moveCommand,
   run: runCommand,
+  sessions: sessionsCommand,
   sync: syncCommand,
   uninstall: uninstallCommand,
   use: useCommand,

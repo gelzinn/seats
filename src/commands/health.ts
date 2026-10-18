@@ -5,7 +5,7 @@ import pc from "picocolors";
 import { seatSourceById } from "../providers/index.ts";
 import type { Seat } from "../types.ts";
 import { discoverSeats } from "./list.ts";
-import { fail, intro, table } from "./ui.ts";
+import { fail, intro, table, truncate } from "./ui.ts";
 
 const PROMPT = "Reply with exactly the word ok and nothing else.";
 const TIMEOUT_MS = 120_000;
@@ -103,7 +103,6 @@ export function checkable(seats: Seat[], filter?: string): Seat[] {
   );
 }
 
-const truncate = (text: string, max = 60) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 const color = { ok: pc.green, unexpected: pc.yellow, error: pc.red };
 
 /** `seats health [tool|id]`: asks every signed-in seat to answer, in parallel, and shows a table. */
