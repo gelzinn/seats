@@ -312,7 +312,7 @@ seatEnv("claude", "work"); // { CLAUDE_CONFIG_DIR: "/home/you/.config/seats/clau
 | **Antigravity** | `~/.antigravity` | `~/.antigravity` |
 | **OpenCode** | `~/.local/share/opencode` | — |
 
-A seat only appears once it is signed in. Claude seats are checked with `claude auth status`.
+A seat only appears once it is signed in. For Claude, seats reads that from the seat's own files and never runs `claude auth status`, which refreshes an expired token and can sign an account out when that refresh races another session.
 
 ### API keys
 
