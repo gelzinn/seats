@@ -6,6 +6,7 @@ import { healthCommand } from "./commands/health.ts";
 import { installCommand, uninstallCommand } from "./commands/install.ts";
 import { currentCommand, listCommand } from "./commands/list.ts";
 import { migrateCommand } from "./commands/migrate.ts";
+import { autoSwitchCommand, hookCommand, runCommand } from "./commands/run.ts";
 import { pickCommand, useCommand } from "./commands/switch.ts";
 import { syncCommand } from "./commands/sync.ts";
 
@@ -16,6 +17,12 @@ Usage:
   seats list [kind]     Show signed-in seats (cli | api | cloud)
   seats current         Show active homedirs and env
   seats use <id>        Activate a seat without launching
+  seats run <tool> [args...]
+                        Launch the active seat of a tool, without the picker
+  seats auto-switch [on|off]
+                        Off by default. When on, a seat at its usage limit is
+                        skipped, and a Claude Code session that hits it moves
+                        to the next seat with --resume
   seats health [tool|id]
                         Ask each signed-in seat to reply and show which work
   seats add [tool] [name]
@@ -43,6 +50,8 @@ Examples:
   seats use claude:primary
   seats use api:openrouter
   seats health
+  seats run claude --continue
+  seats auto-switch on
   seats add claude work
   seats add codex personal -- --device-auth
   seats install mcp docs -- npx -y docs-mcp
@@ -56,8 +65,10 @@ const printVersion = async () => console.log(version);
 /** Each command gets the arguments after its name. */
 const commands: Record<string, (args: string[]) => Promise<void>> = {
   add: addCommand,
+  "auto-switch": autoSwitchCommand,
   current: currentCommand,
   health: healthCommand,
+  hook: hookCommand,
   help,
   "--help": help,
   "-h": help,
@@ -66,6 +77,7 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   install: installCommand,
   list: listCommand,
   migrate: migrateCommand,
+  run: runCommand,
   sync: syncCommand,
   uninstall: uninstallCommand,
   use: useCommand,

@@ -43,3 +43,27 @@ export function readActiveMeta(home: string): ActiveMeta | undefined {
     return undefined;
   }
 }
+
+/** Preferences saved in `config.json`; everything is off unless set. */
+export type SeatsConfig = {
+  /** Move to the next seat of the same tool when one hits its usage limit. */
+  autoSwitch?: boolean;
+  /** After a mid-session switch, send "continue" so the work goes on by itself. */
+  autoContinue?: boolean;
+};
+
+export const configFile = (home: string) => join(seatsHome(home), "config.json");
+
+export function readConfig(home: string): SeatsConfig {
+  try {
+    const value: unknown = JSON.parse(readFileSync(configFile(home), "utf8"));
+    return value && typeof value === "object" && !Array.isArray(value) ? (value as SeatsConfig) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function writeConfig(home: string, config: SeatsConfig): void {
+  mkdirSync(seatsHome(home), { recursive: true, mode: 0o700 });
+  writeFileSync(configFile(home), `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+}

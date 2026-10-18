@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { discoverSeatDirs } from "../../home-dirs.ts";
 import type { Seat, SeatSource } from "../../types.ts";
 import { exists } from "../helpers/seats.ts";
+import { claudeFailover } from "./failover.ts";
 import { mergeClaudeConfigs } from "./merge.ts";
+import { claudeUsage } from "./usage.ts";
 
 /** User-level Claude config that should look the same from every seat. */
 const SHARED_ITEMS = [
@@ -77,6 +79,8 @@ export const claudeSeats: SeatSource = {
     args: ["auth", "login"],
     signedIn: async (dir) => (await claudeAccount(dir)) !== undefined,
   },
+  usage: claudeUsage,
+  failover: claudeFailover,
   // Cheapest model, no MCP servers: only checks that the account answers.
   health: (prompt) => ({ args: ["-p", prompt, "--model", "haiku", "--strict-mcp-config"], model: "haiku" }),
   async discover(home) {

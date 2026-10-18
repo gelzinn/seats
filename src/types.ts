@@ -55,7 +55,24 @@ export type SeatSource = {
    * line the CLI prints.
    */
   health?: (prompt: string, dir: string) => { args: string[]; model?: string };
+  /** Current usage of the account in `dir`, read without spending any. Undefined when it can't be read. */
+  usage?: (dir: string) => Promise<Usage | undefined>;
+  /**
+   * How a supervised session moves to another seat when this one hits its
+   * limit mid-session (`seats auto-switch`). Needs a CLI hook that reports it.
+   */
+  failover?: {
+    /** Settings that make the CLI run `command` when a turn fails on a rate limit. */
+    hookSettings: (command: string) => unknown;
+    /** Args that load the settings file written from `hookSettings`. */
+    settingsArgs: (file: string) => string[];
+    /** Args that reopen a session, optionally sending `prompt` first. */
+    resumeArgs: (sessionId: string, prompt?: string) => string[];
+  };
 };
+
+export type UsageWindow = { name: string; usedPercent: number; resetsAt?: Date };
+export type Usage = { windows: UsageWindow[] };
 
 /** A folder where the tool keeps user skills. */
 export type SkillsDir = {

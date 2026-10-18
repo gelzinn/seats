@@ -6,9 +6,10 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { assertSwitchable, isSymlink, replaceSymlink } from "../fs.ts";
 import { seatSourceById } from "../providers/index.ts";
-import { writeActiveEnv } from "../store.ts";
+import { readConfig, writeActiveEnv } from "../store.ts";
 import type { Seat, SeatKind } from "../types.ts";
 import { currentSeats, discoverWithSpinner } from "./list.ts";
+import { supervise } from "./run.ts";
 import { syncSeats } from "./sync.ts";
 import { KINDS, cancelIfNeeded, fail, formatSeat, tilde } from "./ui.ts";
 
@@ -106,6 +107,22 @@ export async function pickCommand(args: string[]): Promise<void> {
   const pointer = seat.dir ? `\n${pc.dim(tilde(seat.dir))}` : "";
   const env = seat.env ? `\n${pc.dim("source ~/.config/seats/active.env")}` : "";
   p.outro(`${formatSeat(seat)}${pointer}${env}`);
+
+  const source = seatSourceById(seat.source);
+  const config = readConfig(homedir());
+  if (config.autoSwitch && seat.kind === "cli" && source.binary && source.configDirEnv) {
+    const sameTool = seats.filter((item) => item.source === seat.source);
+    process.exitCode = await supervise({
+      home: homedir(),
+      source,
+      seats: sameTool,
+      start: seat,
+      args,
+      autoSwitch: true,
+      autoContinue: config.autoContinue,
+    });
+    return;
+  }
   launch(seat, args);
 }
 

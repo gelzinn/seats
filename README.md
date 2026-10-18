@@ -74,6 +74,8 @@ seats list               # every signed-in seat
 seats list api           # only cli | api | cloud
 seats current            # what each live path points at
 seats use claude:work    # activate without launching
+seats run claude         # launch the active seat, no picker (works as alias claude='seats run claude')
+seats auto-switch on     # off by default: move to the next seat when one hits its limit
 seats use api:openrouter
 seats health             # ask every seat to reply and see which ones work
 seats add claude work    # sign a new account in, without touching the active one
@@ -109,6 +111,27 @@ source ~/.config/seats/active.env
 ```
 
 It catches what switching wouldn't tell you: a seat that was signed out, hit its usage limit or points at a model the account can't use. The Plan column comes from what each tool already knows about the account (Claude's subscription and rate-limit tier, ChatGPT's plan for Codex). Each check is one tiny prompt on the cheapest model, whatever your config says: Haiku for Claude, and for Codex the newest small model in that account's model list, at its lowest reasoning effort. The Time column shows which model answered. It runs from a temporary folder so no project context is sent. Pass a tool or seat id to check fewer: `seats health codex`, `seats health claude:work`. The command exits with status 1 when any seat doesn't answer, so it works in scripts.
+
+## Switch accounts at the limit
+
+Off by default. Turn it on with `seats auto-switch on`. Tools you launch through seats (`seats`, or `seats run <tool>`) then keep going when an account runs out:
+
+- **Before launching,** seats checks the seat's usage and, if it's at a limit, picks the next seat of the same tool that isn't. This works for Claude Code and Codex, and costs nothing: it reads the same usage endpoints their apps show.
+- **Mid-session (Claude Code),** when a turn fails on the usage limit, seats closes that session, copies the conversation to the next seat and reopens it there with `claude --resume`. It then sends "Continue where you left off." so the work goes on by itself. Use `seats auto-switch on --no-continue` to resume without sending anything.
+- When every seat is out, seats stops and tells you when the first one resets.
+
+How it stays out of the way:
+
+- The limit is reported by a Claude Code `StopFailure` hook that seats passes with `--settings` to the sessions it launches. Your `settings.json` is never changed, and sessions you start without seats never see it. A passing `429` doesn't trigger a switch: seats confirms on the usage endpoint that the seat is really at 100%.
+- Your active seat (`~/.claude` and friends) doesn't change. Only the supervised session moves, so other sessions and tools keep the account they had.
+- Codex has no hook for this, so it gets the check before launching only.
+- To get it every time you type `claude`, add `alias claude='seats run claude'` to your shell config. `seats run` also works with auto-switch off, as a way to launch the active seat without the picker.
+
+```bash
+seats auto-switch on      # or: on --no-continue
+seats auto-switch status
+seats auto-switch off
+```
 
 ## One folder for every seat
 
@@ -322,7 +345,7 @@ Seats never signs in for you and never sends credentials anywhere. Keys stay in 
 | `src/providers/index.ts` | The list of providers; everything else reads from it |
 | `src/providers/helpers/` | Code shared by several providers (seat folders, API keys) |
 | `src/cli.ts` | Help text and routing to the commands |
-| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `add`, `health`, `sync`, `install` (`install`, `uninstall`), `migrate` |
+| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `run` (`run`, `auto-switch`, the limit hook), `add`, `health`, `sync`, `install` (`install`, `uninstall`), `migrate` |
 | `src/home-dirs.ts`, `src/store.ts` | Finding and naming seat folders; the `~/.config/seats` layout and `active.env` |
 | `src/share.ts`, `src/skills.ts`, `src/instructions.ts` | Sharing files between seats, and skills and instructions across tools |
 | `src/mcp/` | The tool-neutral MCP library and the JSON helpers adapters build on |
