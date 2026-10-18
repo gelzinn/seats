@@ -13,15 +13,71 @@ import { activateSeat } from "./switch.ts";
 import { syncSeats } from "./sync.ts";
 import { cancelIfNeeded, fail, formatSeat, intro, tilde } from "./ui.ts";
 
-/** Runs a CLI attached to this terminal and resolves with its exit code. */
-export type Runner = (command: string, args: string[], env: Record<string, string>) => Promise<number>;
+/** Asks for the code the CLI is waiting for; undefined when the user cancels. */
+export type AskCode = (signal: AbortSignal) => Promise<string | undefined>;
 
-export const runInTerminal: Runner = (command, args, env) =>
-  new Promise((resolve, reject) => {
+/** The CLI's own code prompt, and how seats asks for that code instead. */
+export type CodePrompt = { text: string; ask: AskCode };
+
+/** Runs a CLI attached to this terminal and resolves with its exit code. */
+export type Runner = (command: string, args: string[], env: Record<string, string>, codePrompt?: CodePrompt) => Promise<number>;
+
+/**
+ * Runs the CLI with its output passed through line by line. When it prints
+ * `codePrompt.text`, that prompt is hidden and `ask` reads the code instead,
+ * which then goes to the CLI's input. If the CLI exits first, `ask` is aborted.
+ */
+export function runWithCodePrompt(
+  command: string,
+  args: string[],
+  env: Record<string, string>,
+  codePrompt: CodePrompt,
+  write: (text: string) => void = (text) => process.stdout.write(text),
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ["pipe", "pipe", "inherit"], env: { ...process.env, ...env } });
+    const done = new AbortController();
+    let pending = "";
+    let asked = false;
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      if (asked) return write(chunk.toString());
+      pending += chunk.toString();
+      const at = pending.indexOf(codePrompt.text);
+      if (at === -1) {
+        // Hold back the last, unfinished line: it may be the prompt arriving in pieces.
+        const cut = pending.lastIndexOf("\n") + 1;
+        write(pending.slice(0, cut));
+        pending = pending.slice(cut);
+        return;
+      }
+      asked = true;
+      write(pending.slice(0, at));
+      const rest = pending.slice(at + codePrompt.text.length).replace(/^ /, "");
+      pending = "";
+      if (rest) write(rest);
+      codePrompt.ask(done.signal).then((code) => {
+        if (code === undefined) child.kill("SIGTERM");
+        else child.stdin.end(`${code.trim()}\n`);
+      }, reject);
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      done.abort();
+      if (pending) write(pending);
+      resolve(code ?? 1);
+    });
+  });
+}
+
+export const runInTerminal: Runner = (command, args, env, codePrompt) => {
+  if (codePrompt && process.stdin.isTTY) return runWithCodePrompt(command, args, env, codePrompt);
+  return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: "inherit", env: { ...process.env, ...env } });
     child.on("error", reject);
     child.on("exit", (code) => resolve(code ?? 1));
   });
+};
 
 /** Seat sources that `seats add` can sign in to. */
 export const loginSources = (): SeatSource[] =>
@@ -54,7 +110,7 @@ export async function addSeat(
   home: string,
   source: SeatSource,
   slug: string,
-  { extraArgs = [], run = runInTerminal }: { extraArgs?: string[]; run?: Runner } = {},
+  { extraArgs = [], run = runInTerminal, askCode }: { extraArgs?: string[]; run?: Runner; askCode?: AskCode } = {},
 ): Promise<AddResult> {
   const { login, binary, configDirEnv } = source;
   if (!login || !binary || !configDirEnv) throw new Error(`seats can't sign in to ${source.label} yet.`);
@@ -69,7 +125,8 @@ export async function addSeat(
 
   let signedIn = false;
   try {
-    await run(binary, [...login.args, ...extraArgs], { [configDirEnv]: dir });
+    const codePrompt = login.codePrompt && askCode ? { text: login.codePrompt, ask: askCode } : undefined;
+    await run(binary, [...login.args, ...extraArgs], { [configDirEnv]: dir }, codePrompt);
     signedIn = await login.signedIn(dir);
   } finally {
     // The CLI writes files before sign-in completes; don't leave a half-made seat behind.
@@ -138,7 +195,11 @@ export async function addCommand(argv: string[]): Promise<void> {
       "Open the link below and paste the code back here if asked.",
   );
   const home = homedir();
-  const result = await addSeat(home, source, slug, { extraArgs }).catch((error: Error) => fail(error.message));
+  const askCode: AskCode = async (signal) => {
+    const code = await p.password({ message: "Paste the code from the browser", mask: "*", signal });
+    return p.isCancel(code) ? undefined : code;
+  };
+  const result = await addSeat(home, source, slug, { extraArgs, askCode }).catch((error: Error) => fail(error.message));
 
   const seat = (await source.discover(home)).find((item) => item.id === result.id);
   p.log.success(`${seat ? formatSeat(seat) : result.id} is signed in`);
