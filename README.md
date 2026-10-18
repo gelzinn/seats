@@ -160,7 +160,7 @@ seats add claude work              # or say both up front
 seats add codex personal -- --device-auth   # extra args go to the tool's login
 ```
 
-seats creates `~/.config/seats/<tool>/<name>` and runs the tool's own sign-in there. You get the link, open it in any browser, and paste the code back into the terminal when asked. If sign-in doesn't finish, the folder is removed. Once you're in, the new seat picks up the settings, skills and MCP servers your other seats share, and seats offers to switch to it.
+seats creates `~/.config/seats/<tool>/<name>` and runs the tool's own sign-in there. You get the link, open it in any browser, and paste the code back into the terminal when asked. If sign-in doesn't finish, the folder is removed. Naming a seat that already exists but is signed out signs it in again in place, keeping its files; a seat that's still signed in is left alone. Once you're in, the new seat picks up the settings, skills and MCP servers your other seats share, and seats offers to switch to it.
 
 `seats add` works with Claude Code and Codex, which keep each login inside its own folder. Copilot stores its token in the system keyring, Gemini CLI signs in on first run and Kiro doesn't document where its login lives, so sign in to those with the tool itself.
 

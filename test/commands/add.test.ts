@@ -72,6 +72,27 @@ describe("addSeat", () => {
   });
 });
 
+describe("addSeat on a seat that exists but is signed out", () => {
+  test("signs in again in the same folder and keeps its files", async () => {
+    env = tempHome();
+    const settings = env.write(".codex-work/config.toml", "model = 'gpt'\n");
+    const login = fakeLogin(true);
+
+    const result = await addSeat(env.home, codex, "work", { run: login.run });
+
+    expect(result).toMatchObject({ id: "codex:work", dir: join(env.home, ".codex-work"), reused: true });
+    expect(login.calls[0]!.env).toEqual({ CODEX_HOME: join(env.home, ".codex-work") });
+    expect(readFileSync(settings, "utf8")).toBe("model = 'gpt'\n");
+  });
+
+  test("leaves the folder alone when sign-in doesn't finish", async () => {
+    env = tempHome();
+    const settings = env.write(".codex-work/config.toml", "model = 'gpt'\n");
+    await expect(addSeat(env.home, codex, "work", { run: fakeLogin(false).run })).rejects.toThrow("the seat is unchanged");
+    expect(readFileSync(settings, "utf8")).toBe("model = 'gpt'\n");
+  });
+});
+
 describe("loginSources", () => {
   test("only offers CLIs that keep their login inside the seat folder", () => {
     expect(loginSources().map((source) => source.id)).toEqual(["claude", "codex"]);

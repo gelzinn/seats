@@ -28,18 +28,21 @@ export const loginSources = (): SeatSource[] =>
   seatSources.filter((source) => source.login && source.binary && source.configDirEnv && source.livePath);
 
 /** Why `slug` can't name a new seat of `source`, or undefined when it can. */
-export function invalidSlug(home: string, source: SeatSource, slug: string): string | undefined {
+export function invalidSlug(_home: string, _source: SeatSource, slug: string): string | undefined {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) return "Use lowercase letters, numbers and dashes, like work or side-project.";
   if (slug === "default" || isIgnoredAccountDir(slug)) return `"${slug}" is reserved.`;
-  const liveName = basename(source.livePath!(home));
-  if (discoverSeatDirs(home, source.id, liveName).some((seat) => seat.slug === slug)) {
-    return `${source.id}:${slug} already exists.`;
-  }
-  if (lexists(join(storeDir(home, source.id), slug))) return `${join(storeDir(home, source.id), slug)} already exists.`;
   return undefined;
 }
 
-export type AddResult = { id: string; dir: string; shared: number };
+/** The folder of an existing `<source>:<slug>` seat (store or legacy), if there is one. */
+function existingSeatDir(home: string, source: SeatSource, slug: string): string | undefined {
+  const liveName = basename(source.livePath!(home));
+  const found = discoverSeatDirs(home, source.id, liveName).find((seat) => seat.slug === slug)?.dir;
+  const inStore = join(storeDir(home, source.id), slug);
+  return found ?? (lexists(inStore) ? inStore : undefined);
+}
+
+export type AddResult = { id: string; dir: string; shared: number; reused: boolean };
 
 /**
  * Creates `~/.config/seats/<source>/<slug>` and runs the CLI's own sign-in
@@ -58,7 +61,10 @@ export async function addSeat(
   const problem = invalidSlug(home, source, slug);
   if (problem) throw new Error(problem);
 
-  const dir = join(storeDir(home, source.id), slug);
+  // A seat that exists but is signed out is signed in again in place, keeping its files.
+  const existing = existingSeatDir(home, source, slug);
+  if (existing && (await login.signedIn(existing))) throw new Error(`${source.id}:${slug} already exists and is signed in.`);
+  const dir = existing ?? join(storeDir(home, source.id), slug);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
 
   let signedIn = false;
@@ -67,12 +73,13 @@ export async function addSeat(
     signedIn = await login.signedIn(dir);
   } finally {
     // The CLI writes files before sign-in completes; don't leave a half-made seat behind.
-    if (!signedIn) rmSync(dir, { recursive: true, force: true });
+    // A seat that was already there is never removed.
+    if (!signedIn && !existing) rmSync(dir, { recursive: true, force: true });
   }
-  if (!signedIn) throw new Error("Sign-in didn't finish, so no seat was created.");
+  if (!signedIn) throw new Error(existing ? "Sign-in didn't finish; the seat is unchanged." : "Sign-in didn't finish, so no seat was created.");
 
   const shared = syncSeats(home, [source.id]);
-  return { id: `${source.id}:${slug}`, dir, shared: shared.linked.length + shared.merged.length };
+  return { id: `${source.id}:${slug}`, dir, shared: shared.linked.length + shared.merged.length, reused: existing !== undefined };
 }
 
 async function pickSource(id: string | undefined): Promise<SeatSource> {
