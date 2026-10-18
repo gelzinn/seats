@@ -46,13 +46,18 @@ export function matchesFilter(seat: Seat, filter: string | undefined): boolean {
 }
 
 /** Shows the intro and a spinner while finding signed-in seats. Exits when there are none. */
-export async function discoverWithSpinner(kind?: SeatKind, filter?: string, { allowNone = false } = {}): Promise<Seat[]> {
+export async function discoverWithSpinner(
+  kind?: SeatKind,
+  filter?: string,
+  { allowNone = false } = {},
+): Promise<Seat[]> {
   intro();
   const spinner = p.spinner();
   spinner.start("Discovering signed-in seats");
   const seats = (await discoverSeats(homedir(), kind)).filter((seat) => matchesFilter(seat, filter));
   spinner.stop(seats.length === 1 ? "Found 1 signed-in seat" : `Found ${seats.length} signed-in seats`);
-  if (seats.length === 0 && !allowNone) fail(filter ? `No signed-in seat matches ${filter}.` : "No signed-in seats found.");
+  if (seats.length === 0 && !allowNone)
+    fail(filter ? `No signed-in seat matches ${filter}.` : "No signed-in seats found.");
   return seats;
 }
 
@@ -67,15 +72,17 @@ export function signedOutSeats(home: string, signedIn: Seat[], filter: string | 
     .flatMap((source) =>
       discoverSeatDirs(home, source.id, basename(source.livePath!(home)))
         .filter((item) => !known.has(real(item.dir)))
-        .map((item): Seat => ({
-          id: `${source.id}:${item.slug}`,
-          source: source.id,
-          provider: source.id,
-          kind: "cli",
-          label: item.label,
-          dir: item.dir,
-          signedIn: false,
-        })),
+        .map(
+          (item): Seat => ({
+            id: `${source.id}:${item.slug}`,
+            source: source.id,
+            provider: source.id,
+            kind: "cli",
+            label: item.label,
+            dir: item.dir,
+            signedIn: false,
+          }),
+        ),
     )
     .filter((seat) => matchesFilter(seat, filter));
 }
@@ -120,7 +127,9 @@ export async function listCommand([filter]: string[]): Promise<void> {
   for (const seat of seats) p.log.message(formatSeat(seat));
   for (const seat of signedOut) {
     const slug = seat.id.slice(seat.source.length + 1);
-    p.log.message(pc.dim(`${seat.kind}  ${seat.provider} · ${seat.label}  signed out · seats add ${seat.source} ${slug}`));
+    p.log.message(
+      pc.dim(`${seat.kind}  ${seat.provider} · ${seat.label}  signed out · seats add ${seat.source} ${slug}`),
+    );
   }
   p.outro(pc.dim("Run `seats` to switch."));
 }

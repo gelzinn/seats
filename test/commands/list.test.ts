@@ -40,7 +40,10 @@ describe("signedOutSeats", () => {
     const signedIn = [{ ...seat("claude:work", "cli", "claude"), dir: join(env.home, ".config/seats/claude/work") }];
 
     expect(signedOutSeats(env.home, signedIn, "claude").map((item) => item.id)).toEqual(["claude:old"]);
-    expect(signedOutSeats(env.home, signedIn, undefined).map((item) => item.id)).toEqual(["claude:old", "codex:personal"]);
+    expect(signedOutSeats(env.home, signedIn, undefined).map((item) => item.id)).toEqual([
+      "claude:old",
+      "codex:personal",
+    ]);
     expect(signedOutSeats(env.home, signedIn, "api")).toEqual([]);
   });
 });
