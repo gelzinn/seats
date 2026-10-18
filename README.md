@@ -80,6 +80,7 @@ seats auto-switch on     # off by default: move to the next seat when one hits i
 seats use api:openrouter
 seats health             # ask every seat to reply and see which ones work
 seats add claude work    # sign a new account in, without touching the active one
+seats desktop open work  # Claude Desktop on another account, beside the ones already open
 seats sync --dry-run     # preview what sync would share, add or link
 seats sync               # share config between seats and across tools
 seats install mcp docs -- npx -y docs-mcp   # add an MCP server to every tool
@@ -133,6 +134,29 @@ seats auto-switch on      # or: on --no-continue
 seats auto-switch status
 seats auto-switch off
 ```
+
+## Claude Desktop on several accounts
+
+Claude Desktop keeps one signed-in account. Switching means signing out, and the other account's chats leave the window. `seats desktop` gives each account its own data folder instead, so you can open several at once, each in its own window:
+
+```bash
+seats desktop open work      # open Claude Desktop on "work", beside any window already open
+seats desktop list           # each account, its folder and when it was last opened
+seats desktop remove work    # asks first, then deletes only that account's folder (--yes to skip)
+```
+
+Each account lives in `~/.config/seats/claude-desktop/<name>/`. The first `open` creates the folder and the app shows its own sign-in. These accounts are separate from your CLI seats, because the desktop app signs in on its own. The app's own profile, the one you get from the Dock or the app menu, is never read or changed.
+
+It works by starting the app with Chromium's `--user-data-dir` flag. On macOS seats runs `open -n -a Claude --args --user-data-dir=…` on `/Applications/Claude.app` or `~/Applications/Claude.app`. On Linux it runs `claude-desktop` from your `PATH`, which the [official beta package](https://code.claude.com/docs/en/desktop-linux) and the [claude-desktop-debian](https://github.com/aaddrick/claude-desktop-debian) builds both install.
+
+Things to know:
+
+- **Sign in with every other Claude window closed.** Sign-in comes back through a `claude://` link, and the system can hand it to any open window, which then saves the account in the wrong folder. Once an account is signed in, its window can run next to the others.
+- **Open accounts through seats.** If the app restarts itself after an update, the new window opens on the app's own profile, not on the account you were using. Run `seats desktop open <name>` again.
+- **Each account has its own copy of everything.** MCP servers and settings in `claude_desktop_config.json` don't carry over to a new account. If you use Cowork, each account downloads its own sandbox images, which can take several GB.
+- **Claude Code sessions inside the app** still read `~/.claude`, which is your active CLI seat.
+- `--user-data-dir` is a standard Electron flag, but Claude Desktop doesn't document it. If a future release ignores it, this stops working.
+- The Codex desktop app isn't supported yet.
 
 ## One folder for every seat
 

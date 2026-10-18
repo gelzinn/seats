@@ -2,6 +2,7 @@
 // A JSON import, so compiled binaries carry their version without reading package.json.
 import { version } from "../package.json";
 import { addCommand } from "./commands/add.ts";
+import { desktopCommand } from "./commands/desktop.ts";
 import { healthCommand } from "./commands/health.ts";
 import { installCommand, uninstallCommand } from "./commands/install.ts";
 import { currentCommand, listCommand } from "./commands/list.ts";
@@ -29,6 +30,9 @@ Usage:
   seats add [tool] [name]
                         Sign a new account in (claude | codex) without touching
                         the active one. Args after -- go to the tool's login.
+  seats desktop open|list|remove <name>
+                        Open Claude Desktop on another account, side by side
+                        with the ones already open (macOS and Linux)
   seats sync            Share config and trust between seats, and MCP servers,
                         skills and instructions across tools (--dry-run to preview)
   seats install mcp <name> -- <command> [args...] [--env KEY=VALUE ...]
@@ -56,6 +60,7 @@ Examples:
   seats auto-switch on
   seats add claude work
   seats add codex personal -- --device-auth
+  seats desktop open work
   seats install mcp docs -- npx -y docs-mcp
   seats install skill ./review --dry-run
   seats uninstall mcp docs
@@ -69,6 +74,7 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   add: addCommand,
   "auto-switch": autoSwitchCommand,
   current: currentCommand,
+  desktop: desktopCommand,
   health: healthCommand,
   hook: hookCommand,
   help,
