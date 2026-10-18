@@ -505,6 +505,10 @@ export function runImport(home: string, folder: string, dryRun: boolean): void {
   const plan = planImport(home, folder);
   if (!dryRun) applyImport(plan);
   printImport(plan, dryRun);
+  if (dryRun)
+    console.log(
+      pc.dim("\nThe sync preview below reads your current files; without --dry-run it runs on the imported ones."),
+    );
   printSync(syncAll(home, { dryRun }), dryRun);
 
   const unshared = unsharedTools(home, plan);
