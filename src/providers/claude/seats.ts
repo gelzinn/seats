@@ -78,6 +78,8 @@ export const claudeSeats: SeatSource = {
   login: {
     args: ["auth", "login"],
     signedIn: async (dir) => (await claudeAccount(dir)) !== undefined,
+    // Its own prompt echoes nothing, so a paste looks like it didn't land.
+    codePrompt: "Paste code here if prompted >",
   },
   usage: claudeUsage,
   failover: claudeFailover,

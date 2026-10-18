@@ -47,6 +47,11 @@ export type SeatSource = {
     args: string[];
     /** True once the folder holds a signed-in account. */
     signedIn: (dir: string) => boolean | Promise<boolean>;
+    /**
+     * What the CLI prints when it waits for a code pasted from the browser.
+     * seats asks for the code itself instead, showing what was pasted as `*`.
+     */
+    codePrompt?: string;
   };
   /**
    * How `seats health` asks a seat one short question, non-interactively, on
