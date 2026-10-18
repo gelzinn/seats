@@ -55,7 +55,7 @@ function prompt(line: Line): string | undefined {
     ? content.find((block) => block?.type === "text" && typeof block.text === "string")?.text
     : content;
   const value = text(typed);
-  return value && !WRAPPER.test(value) ? value.replace(/<[^>]*>/g, " ") : undefined;
+  return value && !WRAPPER.test(value) ? text(value.replace(/<[^>]*>/g, " ")) : undefined;
 }
 
 /**

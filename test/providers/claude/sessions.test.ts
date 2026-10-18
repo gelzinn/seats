@@ -24,6 +24,7 @@ describe("readClaudeSession", () => {
         user("Caveat: injected", { isMeta: true }),
         user([{ type: "tool_result", content: "output" }]),
         user("<task-notification>done</task-notification>"),
+        user("<pasted></pasted>"),
         user([{ type: "text", text: "<pasted>Fix the\n  login   bug</pasted>" }]),
         user("second prompt"),
       ),
