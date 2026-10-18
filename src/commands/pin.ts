@@ -14,7 +14,14 @@ export function pinLines(cwd = process.cwd()): string[] {
 const pinnable = () => seatSources.filter((source) => source.kind === "cli" && source.livePath);
 
 /** `seats pin [tool:seat]`: pin a seat in `./.seats`, or show the pins in effect here. */
-export async function pinCommand([id]: string[]): Promise<void> {
+export async function pinCommand(args: string[]): Promise<void> {
+  if (args.includes("--vscode"))
+    fail(
+      "seats can't pin the VS Code extension: its claudeCode.environmentVariables setting is machine-scoped, so VS Code ignores it in .vscode/settings.json.",
+    );
+  const flag = args.find((arg) => arg.startsWith("-"));
+  if (flag) fail(`seats pin doesn't take ${flag}.`);
+  const [id] = args;
   if (!id) {
     const lines = pinLines();
     console.log(lines.length > 0 ? lines.join("\n") : "No seat is pinned here. Pin one with seats pin claude:work.");
