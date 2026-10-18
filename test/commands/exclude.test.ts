@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, lstatSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { excludeItem, excludeMcp, includeItem, includeMcp, listExclusions } from "../../src/commands/exclude.ts";
 import { installMcp, uninstallMcp } from "../../src/commands/install.ts";
@@ -61,6 +61,23 @@ describe("excludeItem", () => {
     expect(readFileSync(path, "utf8")).toBe("Acme rules\n");
     expect(readFileSync(join(seat("personal"), "CLAUDE.md"), "utf8")).toBe(RULES);
     expect(excludeItem(home, "claude:acme", "CLAUDE.md").status).toBe("already");
+  });
+
+  test("copies the shared item when ~/.config is a symlink to a folder at another depth", () => {
+    env = tempHome();
+    const { home, write } = env;
+    // A dotfiles-managed ~/.config: links seats makes are relative to the real seat folder.
+    mkdirSync(join(home, "dotfiles/deep/config"), { recursive: true });
+    symlinkSync(join(home, "dotfiles/deep/config"), join(home, ".config"));
+    write(".config/seats/claude/personal/CLAUDE.md", RULES);
+    write(".config/seats/claude/acme/.claude.json", {});
+    syncSeats(home);
+    const path = join(seat("acme"), "CLAUDE.md");
+    expect(lstatSync(path).isSymbolicLink()).toBe(true);
+
+    expect(excludeItem(home, "claude:acme", "CLAUDE.md").status).toBe("copied");
+    expect(lstatSync(path).isFile()).toBe(true);
+    expect(readFileSync(path, "utf8")).toBe(RULES);
   });
 
   test("keeps CLAUDE.md out of the full sync while that seat is active, even with the same text", () => {

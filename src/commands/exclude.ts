@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, realpathSync, renameSync, unlinkSync } from "node:fs";
+import { cpSync, mkdirSync, renameSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import * as p from "@clack/prompts";
@@ -9,6 +9,7 @@ import { libraryFile, readLibrary } from "../mcp/library.ts";
 import type { McpAdapter } from "../mcp/types.ts";
 import { mcpAdapters, providers } from "../providers/index.ts";
 import { backupPath } from "../share.ts";
+import { realPath } from "../skills.ts";
 import { readConfig, sharedDir, writeConfig } from "../store.ts";
 import { fail, intro, tilde } from "./ui.ts";
 
@@ -57,17 +58,17 @@ export function excludeItem(home: string, id: string, item: string): ExcludeResu
   if (current.includes(item)) return { status: "already", path };
 
   let status: ExcludeResult["status"] = "kept";
-  if (isSymlink(path) && linkTarget(path) === shared) {
-    if (existsSync(path)) {
-      // From the real path: the shared CLAUDE.md is often a link to shared/AGENTS.md itself.
-      const copy = `${path}.seats-copy-${process.pid}`;
-      cpSync(realpathSync(path), copy, { recursive: true });
-      unlinkSync(path);
-      renameSync(copy, path);
-      status = "copied";
-    } else {
-      unlinkSync(path);
-    }
+  // Real paths on both sides: links are relative to the real seat folder, and
+  // the shared CLAUDE.md is often a link to shared/AGENTS.md itself.
+  const real = isSymlink(path) ? realPath(path) : undefined;
+  if (real && real === realPath(shared)) {
+    const copy = `${path}.seats-copy-${process.pid}`;
+    cpSync(real, copy, { recursive: true });
+    unlinkSync(path);
+    renameSync(copy, path);
+    status = "copied";
+  } else if (isSymlink(path) && !real && linkTarget(path) === shared) {
+    unlinkSync(path);
   }
   setExclusions(home, id, [...current, item]);
   return { status, path };
