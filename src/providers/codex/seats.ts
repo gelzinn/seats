@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { SeatSource } from "../../types.ts";
 import { exists, homeSeats } from "../helpers/seats.ts";
 import { codexHealth } from "./health.ts";
-import { codexUsage } from "./usage.ts";
+import { codexUsage, readCodexUsage } from "./usage.ts";
 
 /** Email and plan from the ChatGPT `id_token` that `codex login` saves, decoded locally. */
 function codexAccount(dir: string): { email?: string; plan?: string } {
@@ -39,6 +39,7 @@ export const codexSeats: SeatSource = {
   },
   health: codexHealth,
   usage: codexUsage,
+  readUsage: readCodexUsage,
   // config.toml carries MCP servers and trusted projects; auth.json and sessions stay per account.
   sharedItems: ["config.toml", "AGENTS.md", "agents", "skills", "rules", "prompts", "hooks.json"],
   async discover(home) {
