@@ -3,11 +3,11 @@ import { basename, join } from "node:path";
 import pc from "picocolors";
 import { isSymlink, lexists } from "../fs.ts";
 import { discoverSeatDirs } from "../home-dirs.ts";
-import { syncInstructions, type InstructionsReport } from "../instructions.ts";
-import { syncMcp, type McpSyncReport } from "../mcp/library.ts";
+import { type InstructionsReport, syncInstructions } from "../instructions.ts";
+import { type McpSyncReport, syncMcp } from "../mcp/library.ts";
 import { instructionsTargets, providers, seatSources, skillsTargets } from "../providers/index.ts";
 import { shareItems } from "../share.ts";
-import { syncSkills, type SkillsReport } from "../skills.ts";
+import { type SkillsReport, syncSkills } from "../skills.ts";
 import { sharedDir } from "../store.ts";
 import { tilde } from "./ui.ts";
 

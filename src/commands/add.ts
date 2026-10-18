@@ -20,7 +20,12 @@ export type AskCode = (signal: AbortSignal) => Promise<string | undefined>;
 export type CodePrompt = { text: string; ask: AskCode };
 
 /** Runs a CLI attached to this terminal and resolves with its exit code. */
-export type Runner = (command: string, args: string[], env: Record<string, string>, codePrompt?: CodePrompt) => Promise<number>;
+export type Runner = (
+  command: string,
+  args: string[],
+  env: Record<string, string>,
+  codePrompt?: CodePrompt,
+) => Promise<number>;
 
 /**
  * Runs the CLI with its output passed through line by line. When it prints
@@ -85,7 +90,8 @@ export const loginSources = (): SeatSource[] =>
 
 /** Why `slug` can't name a new seat of `source`, or undefined when it can. */
 export function invalidSlug(_home: string, _source: SeatSource, slug: string): string | undefined {
-  if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) return "Use lowercase letters, numbers and dashes, like work or side-project.";
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(slug))
+    return "Use lowercase letters, numbers and dashes, like work or side-project.";
   if (slug === "default" || isIgnoredAccountDir(slug)) return `"${slug}" is reserved.`;
   return undefined;
 }
@@ -119,7 +125,8 @@ export async function addSeat(
 
   // A seat that exists but is signed out is signed in again in place, keeping its files.
   const existing = existingSeatDir(home, source, slug);
-  if (existing && (await login.signedIn(existing))) throw new Error(`${source.id}:${slug} already exists and is signed in.`);
+  if (existing && (await login.signedIn(existing)))
+    throw new Error(`${source.id}:${slug} already exists and is signed in.`);
   const dir = existing ?? join(storeDir(home, source.id), slug);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
 
@@ -133,10 +140,18 @@ export async function addSeat(
     // A seat that was already there is never removed.
     if (!signedIn && !existing) rmSync(dir, { recursive: true, force: true });
   }
-  if (!signedIn) throw new Error(existing ? "Sign-in didn't finish; the seat is unchanged." : "Sign-in didn't finish, so no seat was created.");
+  if (!signedIn)
+    throw new Error(
+      existing ? "Sign-in didn't finish; the seat is unchanged." : "Sign-in didn't finish, so no seat was created.",
+    );
 
   const shared = syncSeats(home, [source.id]);
-  return { id: `${source.id}:${slug}`, dir, shared: shared.linked.length + shared.merged.length, reused: existing !== undefined };
+  return {
+    id: `${source.id}:${slug}`,
+    dir,
+    shared: shared.linked.length + shared.merged.length,
+    reused: existing !== undefined,
+  };
 }
 
 async function pickSource(id: string | undefined): Promise<SeatSource> {

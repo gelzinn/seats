@@ -31,7 +31,7 @@ jobs:
         run: python3 .github/scripts/check_pr.py "$GITHUB_EVENT_PATH"
 
   test:
-    name: Typecheck and test
+    name: Lint, typecheck and test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -40,6 +40,8 @@ jobs:
           bun-version: 1.4.3
       - name: Install dependencies
         run: bun install --frozen-lockfile
+      - name: Lint and format
+        run: bun run lint
       - name: Typecheck
         run: bun run typecheck
       - name: Test

@@ -22,7 +22,7 @@ END_COMMIT_OVERRIDE
 
 ## Checklist
 
-- [ ] `bun test` and `bun run typecheck` pass
+- [ ] `bun run check` passes (Biome lint and format, typecheck, tests)
 - [ ] `bun src/cli.ts help` runs without errors
 - [ ] Changes to seat folders were tried with `--dry-run` or a throwaway `HOME`
 - [ ] A new provider (if added) lives in `src/providers/<id>/` and is listed in `src/providers/index.ts`

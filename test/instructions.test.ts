@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { lstatSync, readFileSync, readlinkSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
-import { instructionsFile, syncInstructions, type InstructionsTarget } from "../src/instructions.ts";
+import { type InstructionsTarget, instructionsFile, syncInstructions } from "../src/instructions.ts";
 import { tempHome } from "./helpers/temp-home.ts";
 
 let env: ReturnType<typeof tempHome>;
 afterEach(() => env?.cleanup());
 
-const at = (...parts: string[]) => (home: string) => join(home, ...parts);
+const at =
+  (...parts: string[]) =>
+  (home: string) =>
+    join(home, ...parts);
 
 describe("syncInstructions", () => {
   const targets: InstructionsTarget[] = [

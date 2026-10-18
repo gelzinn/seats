@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, lstatSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { addSeat, invalidSlug, loginSources, runWithCodePrompt, type Runner } from "../../src/commands/add.ts";
+import { addSeat, invalidSlug, loginSources, type Runner, runWithCodePrompt } from "../../src/commands/add.ts";
 import { seatSourceById } from "../../src/providers/index.ts";
 import { tempHome } from "../helpers/temp-home.ts";
 
@@ -88,14 +88,18 @@ describe("addSeat on a seat that exists but is signed out", () => {
   test("leaves the folder alone when sign-in doesn't finish", async () => {
     env = tempHome();
     const settings = env.write(".codex-work/config.toml", "model = 'gpt'\n");
-    await expect(addSeat(env.home, codex, "work", { run: fakeLogin(false).run })).rejects.toThrow("the seat is unchanged");
+    await expect(addSeat(env.home, codex, "work", { run: fakeLogin(false).run })).rejects.toThrow(
+      "the seat is unchanged",
+    );
     expect(readFileSync(settings, "utf8")).toBe("model = 'gpt'\n");
   });
 });
 
 describe("runWithCodePrompt", () => {
   /** A fake login: prints a link, the prompt (in two pieces, no newline), reads the code. */
-  function fakeCli(script = 'echo "Visit: https://login.example.com"; printf "Paste code "; sleep 0.1; printf "here > "; read -r code; echo "got:$code"') {
+  function fakeCli(
+    script = 'echo "Visit: https://login.example.com"; printf "Paste code "; sleep 0.1; printf "here > "; read -r code; echo "got:$code"',
+  ) {
     return ["bash", ["-c", script]] as const;
   }
 
@@ -103,7 +107,19 @@ describe("runWithCodePrompt", () => {
     let output = "";
     const [command, args] = fakeCli();
     let asked = 0;
-    const code = await runWithCodePrompt(command, [...args], {}, { text: "Paste code here >", ask: async () => (asked++, " abc#123 ") }, (text) => (output += text));
+    const code = await runWithCodePrompt(
+      command,
+      [...args],
+      {},
+      {
+        text: "Paste code here >",
+        ask: async () => {
+          asked++;
+          return " abc#123 ";
+        },
+      },
+      (text) => (output += text),
+    );
     expect(code).toBe(0);
     expect(asked).toBe(1);
     expect(output).toContain("Visit: https://login.example.com");
@@ -113,14 +129,26 @@ describe("runWithCodePrompt", () => {
 
   test("stops the CLI when the user cancels", async () => {
     const [command, args] = fakeCli();
-    const code = await runWithCodePrompt(command, [...args], {}, { text: "Paste code here >", ask: async () => undefined }, () => {});
+    const code = await runWithCodePrompt(
+      command,
+      [...args],
+      {},
+      { text: "Paste code here >", ask: async () => undefined },
+      () => {},
+    );
     expect(code).not.toBe(0);
   });
 
   test("aborts the question when the CLI finishes without asking", async () => {
     const [command, args] = fakeCli('echo "Signed in"');
     let output = "";
-    const code = await runWithCodePrompt(command, [...args], {}, { text: "Paste code here >", ask: async () => "never" }, (text) => (output += text));
+    const code = await runWithCodePrompt(
+      command,
+      [...args],
+      {},
+      { text: "Paste code here >", ask: async () => "never" },
+      (text) => (output += text),
+    );
     expect(code).toBe(0);
     expect(output).toBe("Signed in\n");
   });

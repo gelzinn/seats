@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, readFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
-import { CONTINUE_PROMPT, activeSeat, copyTranscript, nextAvailable, supervise, type UsageOf } from "../../src/commands/run.ts";
+import {
+  activeSeat,
+  CONTINUE_PROMPT,
+  copyTranscript,
+  nextAvailable,
+  supervise,
+  type UsageOf,
+} from "../../src/commands/run.ts";
 import { seatSourceById } from "../../src/providers/index.ts";
 import type { Seat, Usage } from "../../src/types.ts";
 import { tempHome } from "../helpers/temp-home.ts";
@@ -31,7 +38,10 @@ const at = (usedPercent: number, resetsAt?: string): Usage => ({
   windows: [{ name: "five_hour", usedPercent, resetsAt: resetsAt ? new Date(resetsAt) : undefined }],
 });
 
-const usageFrom = (map: Record<string, Usage | undefined>): UsageOf => async (item) => map[item.id];
+const usageFrom =
+  (map: Record<string, Usage | undefined>): UsageOf =>
+  async (item) =>
+    map[item.id];
 
 describe("nextAvailable", () => {
   test("skips seats at their limit, wraps around, and keeps seats whose usage is unknown", async () => {
@@ -44,10 +54,16 @@ describe("nextAvailable", () => {
 
   test("reports the earliest reset when every seat is out", async () => {
     const seats = [seat("a"), seat("b")];
-    const usage = usageFrom({ "claude:a": at(100, "2030-01-01T18:00:00Z"), "claude:b": at(100, "2030-01-01T15:00:00Z") });
+    const usage = usageFrom({
+      "claude:a": at(100, "2030-01-01T18:00:00Z"),
+      "claude:b": at(100, "2030-01-01T15:00:00Z"),
+    });
     const next = await nextAvailable(seats, seats[0]!, new Set(), usage);
     expect(next.seat).toBeUndefined();
-    expect(next.resets.map((date) => date.toISOString())).toEqual(["2030-01-01T15:00:00.000Z", "2030-01-01T18:00:00.000Z"]);
+    expect(next.resets.map((date) => date.toISOString())).toEqual([
+      "2030-01-01T15:00:00.000Z",
+      "2030-01-01T18:00:00.000Z",
+    ]);
   });
 });
 
@@ -56,7 +72,10 @@ describe("activeSeat", () => {
     env.write(".config/seats/claude/work/.claude.json", "{}");
     env.write(".config/seats/claude/personal/.claude.json", "{}");
     symlinkSync(".config/seats/claude/personal", join(env.home, ".claude"));
-    expect(activeSeat(env.home, seatSourceById("claude"))).toMatchObject({ id: "claude:personal", dir: seat("personal").dir });
+    expect(activeSeat(env.home, seatSourceById("claude"))).toMatchObject({
+      id: "claude:personal",
+      dir: seat("personal").dir,
+    });
   });
 });
 
@@ -68,14 +87,19 @@ describe("copyTranscript", () => {
     expect(to).toBe(join(seat("personal").dir!, "projects/-repo/s1.jsonl"));
     expect(readFileSync(to!, "utf8")).toBe('{"type":"user"}\n');
     expect(readFileSync(join(seat("personal").dir!, "projects/-repo/s1/tool-results/a.txt"), "utf8")).toBe("result");
-    expect(copyTranscript(env.write("elsewhere/s2.jsonl", "{}"), seat("work").dir!, seat("personal").dir!)).toBeUndefined();
+    expect(
+      copyTranscript(env.write("elsewhere/s2.jsonl", "{}"), seat("work").dir!, seat("personal").dir!),
+    ).toBeUndefined();
   });
 });
 
 describe("seats hook limit", () => {
   const cli = join(import.meta.dir, "../../src/cli.ts");
   const run = (vars: Record<string, string>) =>
-    Bun.spawnSync(["bun", cli, "hook", "limit"], { stdin: Buffer.from('{"error":"rate_limit"}'), env: { ...process.env, ...vars } });
+    Bun.spawnSync(["bun", cli, "hook", "limit"], {
+      stdin: Buffer.from('{"error":"rate_limit"}'),
+      env: { ...process.env, ...vars },
+    });
 
   test("hands the report to the supervisor, and does nothing outside a supervised session", () => {
     const marker = join(env.home, "limit.json");
@@ -84,7 +108,9 @@ describe("seats hook limit", () => {
 
     const unsupervised = { ...process.env } as Record<string, string>;
     delete unsupervised.SEATS_LIMIT_MARKER;
-    expect(Bun.spawnSync(["bun", cli, "hook", "limit"], { stdin: Buffer.from("{}"), env: unsupervised }).exitCode).toBe(0);
+    expect(Bun.spawnSync(["bun", cli, "hook", "limit"], { stdin: Buffer.from("{}"), env: unsupervised }).exitCode).toBe(
+      0,
+    );
   });
 });
 
@@ -132,7 +158,15 @@ describe("supervise", () => {
     const usageOf: UsageOf = async (item) =>
       item.id === "claude:work" && existsSync(join(env.home, "limit-reported")) ? at(100) : at(20);
 
-    const code = await supervise({ home: env.home, source: claude, seats, start: seats[0]!, args: [], autoSwitch: true, usageOf });
+    const code = await supervise({
+      home: env.home,
+      source: claude,
+      seats,
+      start: seats[0]!,
+      args: [],
+      autoSwitch: true,
+      usageOf,
+    });
 
     expect(code).toBe(0);
     const [first, second] = launches(log).map((line) => line.split("|"));
@@ -150,7 +184,15 @@ describe("supervise", () => {
     const seats = [seat("work"), seat("personal")];
     // The 429 came with a limit message, but usage says the seat still has room.
     const usageOf: UsageOf = async () => at(20);
-    const code = await supervise({ home: env.home, source: claude, seats, start: seats[0]!, args: [], autoSwitch: true, usageOf });
+    const code = await supervise({
+      home: env.home,
+      source: claude,
+      seats,
+      start: seats[0]!,
+      args: [],
+      autoSwitch: true,
+      usageOf,
+    });
     expect(code).toBe(0);
     expect(launches(log)).toHaveLength(1);
     expect(existsSync(join(env.home, "passing-reported"))).toBe(true);
@@ -160,11 +202,31 @@ describe("supervise", () => {
     const log = fakeClaude();
     const seats = [seat("work"), seat("personal")];
     const workOut = usageFrom({ "claude:work": at(100) });
-    expect(await supervise({ home: env.home, source: claude, seats, start: seats[0]!, args: ["-c"], autoSwitch: true, usageOf: workOut })).toBe(0);
+    expect(
+      await supervise({
+        home: env.home,
+        source: claude,
+        seats,
+        start: seats[0]!,
+        args: ["-c"],
+        autoSwitch: true,
+        usageOf: workOut,
+      }),
+    ).toBe(0);
     expect(launches(log).map((line) => line.split("|")[0])).toEqual(["personal"]);
 
     const allOut = usageFrom({ "claude:work": at(100), "claude:personal": at(100) });
-    expect(await supervise({ home: env.home, source: claude, seats, start: seats[0]!, args: [], autoSwitch: true, usageOf: allOut })).toBe(1);
+    expect(
+      await supervise({
+        home: env.home,
+        source: claude,
+        seats,
+        start: seats[0]!,
+        args: [],
+        autoSwitch: true,
+        usageOf: allOut,
+      }),
+    ).toBe(1);
     expect(launches(log)).toHaveLength(1);
   });
 
@@ -176,7 +238,17 @@ describe("supervise", () => {
       checked = true;
       return at(100);
     };
-    expect(await supervise({ home: env.home, source: claude, seats, start: seats[0]!, args: ["-c"], autoSwitch: false, usageOf })).toBe(0);
+    expect(
+      await supervise({
+        home: env.home,
+        source: claude,
+        seats,
+        start: seats[0]!,
+        args: ["-c"],
+        autoSwitch: false,
+        usageOf,
+      }),
+    ).toBe(0);
     expect(launches(log)).toEqual(["work|-c|"]);
     expect(checked).toBe(false);
   });

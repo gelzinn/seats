@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, lstatSync, readFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
-import { syncSkills, type SkillsTarget } from "../src/skills.ts";
+import { type SkillsTarget, syncSkills } from "../src/skills.ts";
 import { tempHome } from "./helpers/temp-home.ts";
 
 let env: ReturnType<typeof tempHome>;
 afterEach(() => env?.cleanup());
 
-const at = (...parts: string[]) => (home: string) => join(home, ...parts);
+const at =
+  (...parts: string[]) =>
+  (home: string) =>
+    join(home, ...parts);
 
 describe("syncSkills", () => {
   const targets: SkillsTarget[] = [

@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { writeTextAtomic } from "../../fs.ts";
-import { fromCommon, record, type Json } from "../../mcp/convert.ts";
+import { fromCommon, type Json, record } from "../../mcp/convert.ts";
 import { configFile } from "../../mcp/json.ts";
 import type { McpConfig, McpServer, McpServers } from "../../mcp/types.ts";
 import { codexHome } from "./paths.ts";
@@ -15,7 +15,9 @@ const tomlKey = (key: string) => (/^[A-Za-z0-9_-]+$/.test(key) ? key : JSON.stri
 const tomlValue = (value: string | string[]) =>
   Array.isArray(value) ? `[${value.map((item) => JSON.stringify(item)).join(", ")}]` : JSON.stringify(value);
 const tomlTable = (map: Record<string, string>) =>
-  `{ ${Object.entries(map).map(([key, value]) => `${tomlKey(key)} = ${JSON.stringify(value)}`).join(", ")} }`;
+  `{ ${Object.entries(map)
+    .map(([key, value]) => `${tomlKey(key)} = ${JSON.stringify(value)}`)
+    .join(", ")} }`;
 
 function servers(file: string): Json {
   if (!existsSync(file)) return {};
@@ -37,7 +39,9 @@ function toTable(name: string, server: McpServer): string {
   for (const [key, value] of Object.entries(server.options ?? {})) {
     fields[key] = typeof value === "string" || Array.isArray(value) ? tomlValue(value) : String(value);
   }
-  const lines = Object.entries(fields).flatMap(([key, value]) => (value === undefined ? [] : [`${tomlKey(key)} = ${value}`]));
+  const lines = Object.entries(fields).flatMap(([key, value]) =>
+    value === undefined ? [] : [`${tomlKey(key)} = ${value}`],
+  );
   return [`[mcp_servers.${tomlKey(name)}]`, ...lines].join("\n");
 }
 
@@ -82,11 +86,9 @@ export const codexMcp: McpConfig = {
     if (!existsSync(file)) return;
     const before = readFileSync(file, "utf8");
     const expected = withoutServers(record(Bun.TOML.parse(before)), names);
-    const after = removeTables(
-      before,
-      (key) => key[0] === "mcp_servers" && key.length > 1 && names.includes(key[1]!),
-      { marker: MARKER },
-    );
+    const after = removeTables(before, (key) => key[0] === "mcp_servers" && key.length > 1 && names.includes(key[1]!), {
+      marker: MARKER,
+    });
     // Servers written inline (`docs = { ... }` under `[mcp_servers]`) aren't tables, so
     // only write when the result parses to exactly the old config minus those servers.
     let clean = false;

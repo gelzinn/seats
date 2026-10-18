@@ -1,5 +1,5 @@
 import { writeJsonAtomic } from "../../fs.ts";
-import { compact, record, stringMap, strings, type Json } from "../../mcp/convert.ts";
+import { compact, type Json, record, stringMap, strings } from "../../mcp/convert.ts";
 import { configFile, readJson } from "../../mcp/json.ts";
 import type { McpConfig, McpServer, McpServers } from "../../mcp/types.ts";
 

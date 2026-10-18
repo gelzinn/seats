@@ -37,7 +37,10 @@ describe("opencodeMcp remove", () => {
     env = tempHome();
     const file = env.write(".config/opencode/opencode.json", {
       $schema: "https://opencode.ai/config.json",
-      mcp: { docs: { type: "local", command: ["npx"] }, github: { type: "remote", url: "https://api.example.com/mcp" } },
+      mcp: {
+        docs: { type: "local", command: ["npx"] },
+        github: { type: "remote", url: "https://api.example.com/mcp" },
+      },
     });
 
     opencodeMcp.remove(file, ["docs"]);

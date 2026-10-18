@@ -357,7 +357,7 @@ Seats never signs in for you and never sends credentials anywhere. Keys stay in 
 
 ## Contributing
 
-Issues and pull requests are welcome. Run `bun test` and `bun run typecheck` before opening one. Tests live in `test/`, at the same path as the file they cover (`src/commands/add.ts` → `test/commands/add.test.ts`).
+Issues and pull requests are welcome. Run `bun run check` before opening one: it lints and checks formatting with [Biome](https://biomejs.dev), typechecks and runs the tests. `bun run format` fixes formatting and import order. Tests live in `test/`, at the same path as the file they cover (`src/commands/add.ts` → `test/commands/add.test.ts`).
 
 ### Adding a provider
 

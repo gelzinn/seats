@@ -1,5 +1,15 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  unlinkSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import * as p from "@clack/prompts";
@@ -9,7 +19,7 @@ import { compact } from "../mcp/convert.ts";
 import { forTool, libraryFile, readLibrary, usesEnvRefs } from "../mcp/library.ts";
 import type { McpAdapter, McpServer, ToolOptions, ToolOptionValue } from "../mcp/types.ts";
 import { mcpAdapters, skillsTargets } from "../providers/index.ts";
-import { realPath, skillsLibrary, toolSkillsDirs, type SkillsTarget } from "../skills.ts";
+import { realPath, type SkillsTarget, skillsLibrary, toolSkillsDirs } from "../skills.ts";
 import { fail, intro, table, tilde } from "./ui.ts";
 
 const INSTALL_USAGE = `Install an MCP server or a skill into every tool you have installed.
@@ -90,7 +100,13 @@ const sameServer = (a: McpServer, b: McpServer) =>
 export type McpOptions = { dryRun?: boolean; force?: boolean; adapters?: McpAdapter[] };
 
 /** Library outcome for an install, or an error when the library holds a different server by that name. */
-function libraryInstall(name: string, existing: McpServer | undefined, server: McpServer, force: boolean, file: string): Outcome {
+function libraryInstall(
+  name: string,
+  existing: McpServer | undefined,
+  server: McpServer,
+  force: boolean,
+  file: string,
+): Outcome {
   const path = tilde(file);
   if (!existing) return { where: "library", status: "added", path };
   if (isTombstone(existing)) return { where: "library", status: "added", reason: "uninstall mark cleared", path };
@@ -207,7 +223,10 @@ export function uninstallMcp(
     library[key ?? name] = { ...(existing ?? seen ?? { type: "stdio" }), skip: ["*"] };
     writeJsonAtomic(libraryFile(home), { mcpServers: library });
   }
-  return [{ where: "library", status: "removed", reason: 'marked skip ["*"] so sync won\'t add it back', path }, ...tools];
+  return [
+    { where: "library", status: "removed", reason: 'marked skip ["*"] so sync won\'t add it back', path },
+    ...tools,
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -259,7 +278,12 @@ function pickSkill(dir: string, label: string, wanted: string | undefined): stri
 const isGitUrl = (source: string) => /^(https?|ssh|git|file):\/\//.test(source) || /^[\w.-]+@[\w.-]+:/.test(source);
 
 /** `https://host/org/review-skill.git` → `review-skill`. */
-const repoName = (url: string) => url.replace(/\/+$/, "").split(/[/:]/).pop()!.replace(/\.git$/, "") || "skill";
+const repoName = (url: string) =>
+  url
+    .replace(/\/+$/, "")
+    .split(/[/:]/)
+    .pop()!
+    .replace(/\.git$/, "") || "skill";
 
 function gitClone(url: string, dest: string): void {
   const result = spawnSync("git", ["clone", "--depth", "1", "--quiet", "--", url, dest], {
@@ -285,7 +309,12 @@ export type SkillOptions = { dryRun?: boolean; force?: boolean; targets?: Skills
 type ResolvedSkillOptions = Required<Omit<SkillOptions, "skill">> & { skill?: string };
 
 /** Links the library entry into every tool that doesn't read the library itself. */
-function linkSkill(home: string, name: string, targets: SkillsTarget[], { dryRun, force }: { dryRun: boolean; force: boolean }): Outcome[] {
+function linkSkill(
+  home: string,
+  name: string,
+  targets: SkillsTarget[],
+  { dryRun, force }: { dryRun: boolean; force: boolean },
+): Outcome[] {
   const entry = join(skillsLibrary(home), name);
   return toolSkillsDirs(home, targets).map(({ id, dir, native }): Outcome => {
     const link = join(dir, name);
@@ -310,7 +339,12 @@ function copySkill(from: string, to: string): void {
   cpSync(from, to, { recursive: true, dereference: true, filter: (path) => basename(path) !== ".git" });
 }
 
-function installSkillFrom(home: string, dir: string, label: string, options: ResolvedSkillOptions): { name: string; outcomes: Outcome[] } {
+function installSkillFrom(
+  home: string,
+  dir: string,
+  label: string,
+  options: ResolvedSkillOptions,
+): { name: string; outcomes: Outcome[] } {
   const folder = pickSkill(dir, label, options.skill);
   const name = skillName(folder);
   if (!SKILL_NAME.test(name)) {
@@ -323,7 +357,8 @@ function installSkillFrom(home: string, dir: string, label: string, options: Res
   if (realEntry === realFolder) {
     saved = { ...saved, status: "already there" };
   } else if (lexists(entry)) {
-    if (realEntry && isInside(realFolder, realEntry)) throw new Error(`${label} is inside ${tilde(entry)}. Move it out first.`);
+    if (realEntry && isInside(realFolder, realEntry))
+      throw new Error(`${label} is inside ${tilde(entry)}. Move it out first.`);
     if (!options.force) throw new Error(`${tilde(entry)} already exists. Use --force to replace it.`);
     saved = { ...saved, status: "replaced" };
   }
@@ -374,8 +409,10 @@ export function uninstallSkill(
   const tools = toolSkillsDirs(home, targets).map(({ id, dir, native }): Outcome => {
     const link = join(dir, name);
     const base = { where: id, path: tilde(link) };
-    if (lexists(link) && !isSymlink(link)) return { ...base, status: "skipped", reason: `its own ${name} folder stays` };
-    if (isSymlink(link) && !linksTo(link, entry)) return { ...base, status: "skipped", reason: `its ${name} links elsewhere` };
+    if (lexists(link) && !isSymlink(link))
+      return { ...base, status: "skipped", reason: `its own ${name} folder stays` };
+    if (isSymlink(link) && !linksTo(link, entry))
+      return { ...base, status: "skipped", reason: `its ${name} links elsewhere` };
     if (isSymlink(link)) {
       if (!dryRun) unlinkSync(link);
       return { ...base, status: "removed" };
@@ -425,13 +462,18 @@ function parseArgs(argv: string[], known: { flags: string[]; options?: string[] 
     if (!known.options?.includes(flag)) throw new Error(`Unknown option ${arg}.`);
     const value = equals === -1 ? own[++i] : arg.slice(equals + 1);
     if (value === undefined) throw new Error(`${flag} needs a value.`);
-    (args.options[flag] ??= []).push(value);
+    args.options[flag] = [...(args.options[flag] ?? []), value];
   }
   return args;
 }
 
 /** `KEY=VALUE` or `Key: Value` pairs, in order. */
-function pairs(values: string[] | undefined, separator: string, usage: string, key: RegExp): Record<string, string> | undefined {
+function pairs(
+  values: string[] | undefined,
+  separator: string,
+  usage: string,
+  key: RegExp,
+): Record<string, string> | undefined {
   if (!values) return undefined;
   return Object.fromEntries(
     values.map((item) => {
@@ -498,8 +540,9 @@ function toolOptions(values: string[] | undefined, toolIds: string[]): Record<st
     const match = /^([a-z0-9-]+)\.([^=]+)=(.*)$/s.exec(item);
     if (!match || !OPTION_KEY.test(match[2]!)) throw new Error(`Expected --set tool.key=value, got "${item}".`);
     const [, tool, key, raw] = match as unknown as [string, string, string, string];
-    if (!toolIds.includes(tool)) throw new Error(`--set ${tool}: seats doesn't write MCP config for "${tool}". Use one of ${toolIds.join(", ")}.`);
-    (tools[tool] ??= {})[key] = optionValue(raw);
+    if (!toolIds.includes(tool))
+      throw new Error(`--set ${tool}: seats doesn't write MCP config for "${tool}". Use one of ${toolIds.join(", ")}.`);
+    tools[tool] = { ...tools[tool], [key]: optionValue(raw) };
   }
   return tools;
 }
@@ -508,7 +551,10 @@ export type McpRequest = { name: string; server: McpServer; force: boolean; dryR
 
 /** `seats install mcp …` arguments, or an error saying what's wrong. */
 export function parseInstallMcp(argv: string[]): McpRequest {
-  const args = parseArgs(argv, { flags: ["--force", "--dry-run", "--sse"], options: ["--env", "--url", "--header", "--set"] });
+  const args = parseArgs(argv, {
+    flags: ["--force", "--dry-run", "--sse"],
+    options: ["--env", "--url", "--header", "--set"],
+  });
   const name = oneName(args, "MCP server");
   if (!SERVER_NAME.test(name)) {
     throw new Error(`"${name}" can't name an MCP server in every tool. Use letters, numbers, dashes and underscores.`);
@@ -519,12 +565,16 @@ export function parseInstallMcp(argv: string[]): McpRequest {
   const command = args.command && trailing.command;
   const urls = options["--url"];
   const request = { name, force: flags.has("--force"), dryRun: flags.has("--dry-run") };
-  const tools = toolOptions(options["--set"], mcpAdapters.map((adapter) => adapter.id));
+  const tools = toolOptions(
+    options["--set"],
+    mcpAdapters.map((adapter) => adapter.id),
+  );
 
   if (command && urls) throw new Error("Give either a command after -- or --url, not both.");
   if (command) {
     if (command.length === 0) throw new Error("Put the server's command after --.");
-    if (options["--header"] || flags.has("--sse")) throw new Error("--header and --sse are for remote servers (--url).");
+    if (options["--header"] || flags.has("--sse"))
+      throw new Error("--header and --sse are for remote servers (--url).");
     const envPairs = [...(options["--env"] ?? []), ...trailing.env];
     const env = pairs(envPairs.length > 0 ? envPairs : undefined, "=", "--env KEY=VALUE", ENV_KEY);
     const rest = command.length > 1 ? command.slice(1) : undefined;
@@ -566,7 +616,9 @@ function printOutcomes(title: string, outcomes: Outcome[], dryRun: boolean): voi
   console.log(table(["Where", "Result", "Path"], rows));
   const failed = outcomes.some((outcome) => outcome.status === "failed");
   if (failed) process.exitCode = 1;
-  p.outro(dryRun ? pc.dim("Dry run: nothing was changed.") : failed ? pc.yellow("Some tools need attention.") : "Done.");
+  p.outro(
+    dryRun ? pc.dim("Dry run: nothing was changed.") : failed ? pc.yellow("Some tools need attention.") : "Done.",
+  );
 }
 
 /** Runs `step`, or ends the command with its error and a pointer to the usage. */
@@ -594,7 +646,8 @@ export async function installCommand(argv: string[]): Promise<void> {
   if (kindOf(kind, "install") === "mcp") {
     const request = orFail(() => parseInstallMcp(rest));
     const outcomes = orFail(() => installMcp(home, request.name, request.server, request));
-    if (usesEnvRefs(request.server)) p.log.warn("Each tool spells env var references differently. Check them in each tool.");
+    if (usesEnvRefs(request.server))
+      p.log.warn("Each tool spells env var references differently. Check them in each tool.");
     return printOutcomes(`Installing MCP server ${pc.cyan(request.name)}`, outcomes, request.dryRun);
   }
   const args = orFail(() => parseArgs(rest, { flags: ["--force", "--dry-run"], options: ["--skill"] }));
@@ -617,6 +670,8 @@ export async function uninstallCommand(argv: string[]): Promise<void> {
   const args = orFail(() => parseArgs(rest, { flags: ["--dry-run"] }));
   const name = orFail(() => oneName(args, what === "mcp" ? "MCP server" : "skill"));
   const dryRun = args.flags.has("--dry-run");
-  const outcomes = orFail(() => (what === "mcp" ? uninstallMcp(home, name, { dryRun }) : uninstallSkill(home, name, { dryRun })));
+  const outcomes = orFail(() =>
+    what === "mcp" ? uninstallMcp(home, name, { dryRun }) : uninstallSkill(home, name, { dryRun }),
+  );
   printOutcomes(`Uninstalling ${what === "mcp" ? "MCP server" : "skill"} ${pc.cyan(name)}`, outcomes, dryRun);
 }

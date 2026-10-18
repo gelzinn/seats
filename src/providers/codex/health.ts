@@ -21,7 +21,8 @@ const EFFORTS = ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
 export function cheapestModel(dir: string): { slug: string; effort?: string } | undefined {
   let models: CachedModel[];
   try {
-    models = (JSON.parse(readFileSync(join(dir, "models_cache.json"), "utf8")) as { models?: CachedModel[] }).models ?? [];
+    models =
+      (JSON.parse(readFileSync(join(dir, "models_cache.json"), "utf8")) as { models?: CachedModel[] }).models ?? [];
   } catch {
     return undefined;
   }
@@ -31,7 +32,9 @@ export function cheapestModel(dir: string): { slug: string; effort?: string } | 
     .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))[0];
   if (!pick) return undefined;
 
-  const levels = (pick.supported_reasoning_levels ?? []).map((level) => (typeof level === "string" ? level : level.effort));
+  const levels = (pick.supported_reasoning_levels ?? []).map((level) =>
+    typeof level === "string" ? level : level.effort,
+  );
   const effort = EFFORTS.find((name) => levels.includes(name));
   return { slug: pick.slug!, effort };
 }

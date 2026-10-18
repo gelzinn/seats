@@ -1,5 +1,15 @@
-import { spawn, type ChildProcess } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { type ChildProcess, spawn } from "node:child_process";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import pc from "picocolors";
@@ -29,7 +39,9 @@ const isLimited = (usage: Usage) => usage.windows.some((window) => window.usedPe
 
 /** When the seat's full windows reset, the earliest first. */
 const resets = (usage: Usage | undefined) =>
-  (usage?.windows ?? []).filter((window) => window.usedPercent >= 100 && window.resetsAt).map((window) => window.resetsAt!);
+  (usage?.windows ?? [])
+    .filter((window) => window.usedPercent >= 100 && window.resetsAt)
+    .map((window) => window.resetsAt!);
 
 const say = (message: string) => console.error(`${pc.cyan("seats")} ${message}`);
 const time = (date: Date) => date.toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" });
@@ -44,7 +56,10 @@ export async function nextAvailable(
   tried: Set<string>,
   usageOf: UsageOf,
 ): Promise<{ seat?: Seat; resets: Date[] }> {
-  const start = Math.max(0, seats.findIndex((seat) => seat.id === from.id));
+  const start = Math.max(
+    0,
+    seats.findIndex((seat) => seat.id === from.id),
+  );
   const seen: Date[] = [];
   for (let step = 0; step < seats.length; step++) {
     const seat = seats[(start + step) % seats.length]!;
@@ -204,7 +219,11 @@ export async function supervise(options: SuperviseOptions): Promise<number> {
       if (!next.seat) return allOut(await seats(), next.resets);
       const { session_id: session, transcript_path: transcript } = ended.limit;
       if (!session || !transcript || !copyTranscript(transcript, seat.dir!, next.seat.dir!)) {
-        say(pc.yellow(`${seat.id} hit its usage limit, but its session couldn't be moved. Starting fresh on ${next.seat.id}.`));
+        say(
+          pc.yellow(
+            `${seat.id} hit its usage limit, but its session couldn't be moved. Starting fresh on ${next.seat.id}.`,
+          ),
+        );
         args = [];
       } else {
         say(`${seat.id} hit its usage limit. Continuing on ${pc.bold(next.seat.id)}…`);
@@ -236,7 +255,15 @@ export function activeSeat(home: string, source: SeatSource): Seat | undefined {
   const dirs = discoverSeatDirs(home, source.id, basename(live));
   const found = dirs.find((item) => real(item.dir) === real(live)) ?? dirs[0];
   if (!found) return undefined;
-  return { id: `${source.id}:${found.slug}`, source: source.id, provider: source.id, kind: "cli", label: found.label, dir: found.dir, signedIn: true };
+  return {
+    id: `${source.id}:${found.slug}`,
+    source: source.id,
+    provider: source.id,
+    kind: "cli",
+    label: found.label,
+    dir: found.dir,
+    signedIn: true,
+  };
 }
 
 /** `seats run <tool> [args…]`: the active seat of `tool`, supervised when auto-switch is on. */
@@ -283,9 +310,13 @@ export async function autoSwitchCommand(argv: string[]): Promise<void> {
 When you launch a tool through seats (seats, or seats run <tool>):
   - a seat already at its usage limit is skipped for the next one of that tool (Claude Code, Codex);
   - if a Claude Code session hits the limit mid-way, seats closes it, copies the
-    conversation to the next seat and reopens it there with --resume${now.autoContinue === false ? "" : `,
+    conversation to the next seat and reopens it there with --resume${
+      now.autoContinue === false
+        ? ""
+        : `,
     sending "${CONTINUE_PROMPT}" so the work goes on by itself (turn that off with
-    seats auto-switch on --no-continue)`}.
+    seats auto-switch on --no-continue)`
+    }.
 
 Your active seat (~/.claude and friends) stays as it was; only that session moves.
 To get this for plain \`claude\`, add to your shell config: alias claude='seats run claude'`);

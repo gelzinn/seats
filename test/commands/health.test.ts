@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { checkable, checkSeat, type Capture, type Output } from "../../src/commands/health.ts";
+import { stripVTControlCharacters } from "node:util";
+import pc from "picocolors";
+import { type Capture, checkable, checkSeat, type Output } from "../../src/commands/health.ts";
 import { table } from "../../src/commands/ui.ts";
 import type { Seat } from "../../src/types.ts";
 
@@ -13,13 +15,15 @@ const seat = (id: string, source = id.split(":")[0]!, kind: Seat["kind"] = "cli"
   signedIn: true,
 });
 
-const reply = (output: Partial<Output>): Capture => async () => ({
-  code: 0,
-  stdout: "",
-  stderr: "",
-  timedOut: false,
-  ...output,
-});
+const reply =
+  (output: Partial<Output>): Capture =>
+  async () => ({
+    code: 0,
+    stdout: "",
+    stderr: "",
+    timedOut: false,
+    ...output,
+  });
 
 describe("checkSeat", () => {
   test("runs the tool's health command against the seat folder", async () => {
@@ -56,7 +60,8 @@ describe("checkSeat", () => {
   });
 
   test("shows the message of an API error dumped as JSON", async () => {
-    const error = 'ERROR: {"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The model is not supported."}}';
+    const error =
+      'ERROR: {"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The model is not supported."}}';
     const result = await checkSeat(seat("codex:work"), reply({ code: 1, stderr: `${error}\n` }));
     expect(result).toMatchObject({ status: "error", reply: "The model is not supported." });
   });
@@ -68,7 +73,12 @@ describe("checkSeat", () => {
 });
 
 describe("checkable", () => {
-  const seats = [seat("claude:work"), seat("codex:personal"), seat("gemini:default"), seat("api:openrouter", "opencode-api", "api")];
+  const seats = [
+    seat("claude:work"),
+    seat("codex:personal"),
+    seat("gemini:default"),
+    seat("api:openrouter", "opencode-api", "api"),
+  ];
 
   test("keeps CLI seats whose tool can be checked", () => {
     expect(checkable(seats).map((item) => item.id)).toEqual(["claude:work", "codex:personal"]);
@@ -82,7 +92,7 @@ describe("checkable", () => {
 
 describe("table", () => {
   test("pads columns by visible width, ignoring colors", () => {
-    const text = table(["Seat", "Reply"], [["claude:work", "\x1b[32mok\x1b[39m"]]).replace(/\x1b\[[0-9;]*m/g, "");
+    const text = stripVTControlCharacters(table(["Seat", "Reply"], [["claude:work", pc.green("ok")]]));
     expect(text.split("\n")).toEqual([
       "┌─────────────┬───────┐",
       "│ Seat        │ Reply │",
