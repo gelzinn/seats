@@ -152,7 +152,7 @@ It works by starting the app with Chromium's `--user-data-dir` flag. On macOS se
 Things to know:
 
 - **Sign in with every other Claude window closed.** Sign-in comes back through a `claude://` link, and the system can hand it to any open window, which then saves the account in the wrong folder. Once an account is signed in, its window can run next to the others.
-- **Open accounts through seats.** If the app restarts itself after an update, the new window opens on the app's own profile, not on the account you were using. Run `seats desktop open <name>` again.
+- **Open accounts through seats.** Claude from the Dock, Spotlight or the app menu opens the app's own profile, and so does a Dock icon pinned from a running window. If the app restarts itself after an update, the new window opens on that profile too. Run `seats desktop open <name>` again.
 - **Each account has its own copy of everything.** MCP servers and settings in `claude_desktop_config.json` don't carry over to a new account. If you use Cowork, each account downloads its own sandbox images, which can take several GB.
 - **Claude Code sessions inside the app** still read `~/.claude`, which is your active CLI seat.
 - `--user-data-dir` is a standard Electron flag, but Claude Desktop doesn't document it. If a future release ignores it, this stops working.
