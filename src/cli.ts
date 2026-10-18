@@ -14,7 +14,8 @@ const HELP = `seats — switch the active AI CLI, API, or cloud seat
 
 Usage:
   seats                 Interactive picker
-  seats list [kind]     Show signed-in seats (cli | api | cloud)
+  seats list [filter]   Show seats: all, or one kind (cli | api | cloud), tool
+                        (claude, openrouter…) or seat id. Signed-out ones show dimmed
   seats current         Show active homedirs and env
   seats use <id>        Activate a seat without launching
   seats run <tool> [args...]
@@ -47,6 +48,7 @@ Usage:
 Examples:
   seats
   seats list api
+  seats list claude
   seats use claude:primary
   seats use api:openrouter
   seats health

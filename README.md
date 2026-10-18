@@ -72,6 +72,7 @@ alias seats="bun /path/to/seats/src/cli.ts"
 seats                    # pick a kind, then a seat, then launch it
 seats list               # every signed-in seat
 seats list api           # only cli | api | cloud
+seats list claude        # one tool (or provider, or a seat id); signed-out seats show dimmed
 seats current            # what each live path points at
 seats use claude:work    # activate without launching
 seats run claude         # launch the active seat, no picker (works as alias claude='seats run claude')
