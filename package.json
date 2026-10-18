@@ -1,6 +1,6 @@
 {
   "name": "seats",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Switch the active AI seat from your terminal. Interactive picker for CLI tools, API keys and cloud profiles.",
   "keywords": [
     "cli",
@@ -22,7 +22,7 @@
   "scripts": {
     "dev": "bun src/cli.ts",
     "start": "bun src/cli.ts",
-    "build": "bun build src/cli.ts --outfile dist/cli.js --target node --minify && bun build src/lib.ts --outfile dist/lib.js --target node",
+    "build": "bun build src/cli.ts --outfile dist/cli.js --target bun --minify && bun build src/lib.ts --outfile dist/lib.js --target node",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },

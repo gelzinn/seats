@@ -1,0 +1,49 @@
+name: Binaries
+
+on:
+  # CI calls this workflow for PRs; releases call it with their exact tag.
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Exact release tag to build; omitted for PR previews
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: seats-${{ matrix.target }}
+    # Each binary is built and smoke-tested on its own platform, never cross-compiled.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            runner: ubuntu-latest
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm
+          - target: darwin-arm64
+            runner: macos-15
+          - target: darwin-x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Build, sign and smoke-test the binary
+        run: bash .github/scripts/build_binary.sh ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: seats-${{ matrix.target }}
+          path: dist/release/seats-${{ matrix.target }}
+          if-no-files-found: error

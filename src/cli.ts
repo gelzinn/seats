@@ -1,4 +1,6 @@
 #!/usr/bin/env bun
+// A JSON import, so compiled binaries carry their version without reading package.json.
+import { version } from "../package.json";
 import { addCommand } from "./commands/add.ts";
 import { healthCommand } from "./commands/health.ts";
 import { currentCommand, listCommand } from "./commands/list.ts";
@@ -23,6 +25,7 @@ Usage:
   seats migrate         Move ~/.<tool>-* seat folders into ~/.config/seats
                         (--dry-run to preview)
   seats help            Show this help
+  seats --version       Show the installed version
 
 Examples:
   seats
@@ -35,6 +38,7 @@ Examples:
 `;
 
 const help = async () => console.log(HELP);
+const printVersion = async () => console.log(version);
 
 /** Each command gets the arguments after its name. */
 const commands: Record<string, (args: string[]) => Promise<void>> = {
@@ -44,6 +48,8 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   help,
   "--help": help,
   "-h": help,
+  "--version": printVersion,
+  "-v": printVersion,
   list: listCommand,
   migrate: migrateCommand,
   sync: syncCommand,

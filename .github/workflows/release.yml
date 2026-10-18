@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: checks
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.pending.outputs.tag }}
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      # GITHUB_TOKEN opens release PRs as github-actions[bot]. A maintainer
+      # must select "Approve workflows to run" before their PR checks start.
+      # https://docs.github.com/en/actions/concepts/security/github_token
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Release Please
+        run: npm install --prefix "$RUNNER_TEMP/release-please" --no-audit --no-fund release-please@17.3.0
+      - name: Update the release PR and create pending drafts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_PATH: ${{ runner.temp }}/release-please/node_modules
+        run: node .github/scripts/release_please.cjs
+      - name: Find the pending stable draft
+        id: pending
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(python3 -c 'import json; print(json.load(open("package.json", encoding="utf-8"))["version"])')
+          # Until the first release PR merges there is no v0.0.0 release to look up.
+          if [ "$version" = 0.0.0 ]; then
+            exit 0
+          fi
+          tag="v$version"
+          draft=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease --jq '.isDraft and (.isPrerelease | not)')
+          if [ "$draft" = true ]; then
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          fi
+
+  binaries:
+    needs: release
+    if: needs.release.outputs.tag != ''
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ needs.release.outputs.tag }}
+
+  publish:
+    needs: [release, binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: seats-*
+          path: binaries
+          merge-multiple: true
+      - name: Verify and publish the pending draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ASSET_DIR: binaries
+        run: bash .github/scripts/publish_release.sh

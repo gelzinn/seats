@@ -34,6 +34,21 @@ Hitting a usage limit mid-task shouldn't mean logging out, logging back in and r
 
 ## Install
 
+```bash
+curl -fsSL https://raw.githubusercontent.com/gelzinn/seats/main/install.sh | bash
+```
+
+This works once the first release is published. The script downloads the binary for your machine (Linux or macOS, x64 or arm64), checks it against the release's `SHA256SUMS` and installs it to `~/.local/bin/seats`. Bun isn't needed. Run it again to update.
+
+To pin a release or install somewhere else, set `SEATS_VERSION` or `SEATS_INSTALL_DIR`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gelzinn/seats/main/install.sh | SEATS_VERSION=0.1.0 bash
+```
+
+<details>
+<summary>From source</summary>
+
 Requires [Bun](https://bun.sh).
 
 ```bash
@@ -48,6 +63,8 @@ To get a `seats` command, add an alias to your shell config:
 ```bash
 alias seats="bun /path/to/seats/src/cli.ts"
 ```
+
+</details>
 
 ## Usage
 
@@ -64,6 +81,7 @@ seats sync --dry-run     # preview what sync would share, add or link
 seats sync               # share config between seats and across tools
 seats migrate --dry-run  # preview moving ~/.<tool>-* into ~/.config/seats
 seats migrate
+seats --version          # the installed version
 ```
 
 Extra arguments after the picker go straight to the CLI, so `seats --resume` opens the chosen seat with `claude --resume`.
@@ -282,6 +300,7 @@ Seats never signs in for you and never sends credentials anywhere. Keys stay in 
 | `src/mcp/` | The tool-neutral MCP library and the JSON helpers adapters build on |
 | `src/fs.ts`, `src/types.ts`, `src/lib.ts` | Filesystem helpers, shared types, and the library API for other tools |
 | `test/` | Tests, mirroring `src/`; `test/helpers/temp-home.ts` builds a throwaway `$HOME` |
+| `install.sh`, `.github/` | The installer, CI and the release pipeline |
 
 </details>
 
@@ -313,5 +332,9 @@ export const acme: Provider = {
 ```
 
 Every field except `id` and `label` is optional. Then add `acme` to the list in `src/providers/index.ts`. The picker, `seats sync`, `seats migrate` and the library all read from there. Look at `src/providers/claude/` or `src/providers/codex/` for complete examples.
+
+### Releasing
+
+Releases are automated with [Release Please](https://github.com/googleapis/release-please). PRs are squash-merged and their titles use [Conventional Commits](https://www.conventionalcommits.org). `feat`, `fix`, `perf`, `revert` and `deps` PRs produce a release, and the entry in their "User-facing changes" block becomes the release note. Release Please keeps a release PR open that bumps the version in `package.json`. Merging it builds the binaries for Linux and macOS (x64 and arm64), each on its own platform, smoke-tests them, uploads them with `SHA256SUMS`, verifies the uploaded files and publishes the release.
 
 [MIT licensed](LICENSE) · Created by [gelzin.com](https://gelzin.com).

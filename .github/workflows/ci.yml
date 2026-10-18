@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      binaries:
+        description: Build and smoke-test the binary for every platform
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      binaries:
+        description: Include the platform binaries; releases build their exact tag separately
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  pr-metadata:
+    name: PR title and release notes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate PR title and user-facing release notes
+        run: python3 .github/scripts/check_pr.py "$GITHUB_EVENT_PATH"
+
+  test:
+    name: Typecheck and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Test
+        run: bun test
+      - name: Build the npm package
+        run: bun run build
+
+  lint:
+    name: Shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Lint the installer and release scripts
+        run: shellcheck install.sh .github/scripts/*.sh
+
+  binaries:
+    # A release run builds its tag after this; building here too would upload
+    # the same artifact names twice in one run.
+    if: github.event_name == 'pull_request' || inputs.binaries
+    uses: ./.github/workflows/build.yml
