@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeJsonAtomic } from "../fs.ts";
-import { seatsHome } from "../store.ts";
 import { mcpAdapters } from "../providers/index.ts";
+import { seatsHome } from "../store.ts";
 import { record } from "./convert.ts";
 import type { McpAdapter, McpServer, McpServers } from "./types.ts";
 
@@ -39,9 +39,7 @@ export function forTool(servers: McpServers, toolId: string): McpServers {
 
 /** `${VAR}`, `$VAR`, `{env:VAR}`: every tool spells env references differently. */
 export const usesEnvRefs = (server: McpServer) =>
-  Object.values({ ...server.env, ...server.headers }).some((value) =>
-    /\$\{?[A-Za-z_]|\{env:/.test(value),
-  );
+  Object.values({ ...server.env, ...server.headers }).some((value) => /\$\{?[A-Za-z_]|\{env:/.test(value));
 
 /**
  * Collects user-level MCP servers from every installed tool into the shared

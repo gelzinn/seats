@@ -6,7 +6,7 @@ import { isSymlink, linkTarget } from "../fs.ts";
 import { seatSources } from "../providers/index.ts";
 import { activeMetaFile, readActiveMeta } from "../store.ts";
 import type { Seat, SeatKind } from "../types.ts";
-import { KINDS, fail, formatSeat, intro } from "./ui.ts";
+import { fail, formatSeat, intro, KINDS } from "./ui.ts";
 
 /** Signed-in seats, by kind, then in provider registry order, then by label. */
 export async function discoverSeats(home = homedir(), kind?: SeatKind): Promise<Seat[]> {

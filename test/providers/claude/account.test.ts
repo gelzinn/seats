@@ -13,7 +13,13 @@ afterEach(() => {
 });
 
 const signedIn = (_seat: string) => ({
-  claudeAiOauth: { accessToken: "a", refreshToken: "r", expiresAt: 1, subscriptionType: "team", rateLimitTier: "default_claude_max_5x" },
+  claudeAiOauth: {
+    accessToken: "a",
+    refreshToken: "r",
+    expiresAt: 1,
+    subscriptionType: "team",
+    rateLimitTier: "default_claude_max_5x",
+  },
 });
 /** What Claude Code leaves behind after signing out or a failed refresh. */
 const blanked = { claudeAiOauth: { accessToken: "", refreshToken: "", expiresAt: 0 } };
@@ -56,6 +62,8 @@ describe("claudeSeats.discover", () => {
 
     const seats = await claudeSeats.discover(env.home);
 
-    expect(seats.map((seat) => [seat.id, seat.email, seat.plan])).toEqual([["claude:work", "you@work.example", "Team 5x"]]);
+    expect(seats.map((seat) => [seat.id, seat.email, seat.plan])).toEqual([
+      ["claude:work", "you@work.example", "Team 5x"],
+    ]);
   });
 });

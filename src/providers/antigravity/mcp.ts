@@ -12,7 +12,5 @@ export const antigravityMcp = jsonMcp({
   // Remote servers use `serverUrl`; `url` and `httpUrl` aren't accepted.
   urlKeys: ["serverUrl", "url"],
   toTool: (server) =>
-    server.type === "stdio"
-      ? commonShape(server)
-      : compact({ serverUrl: server.url, headers: server.headers }),
+    server.type === "stdio" ? commonShape(server) : compact({ serverUrl: server.url, headers: server.headers }),
 });

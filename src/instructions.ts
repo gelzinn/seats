@@ -17,7 +17,9 @@ export function instructionsFile(home: string): string {
 
 /** Ignores HTML comments and surrounding whitespace, so an import marker isn't a difference. */
 function normalized(file: string): string {
-  return readFileSync(file, "utf8").replace(/<!--[\s\S]*?-->/g, "").trim();
+  return readFileSync(file, "utf8")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .trim();
 }
 
 function real(path: string): string {

@@ -4,7 +4,12 @@ import { join } from "node:path";
 export type ClaudeAccount = { email?: string; plan?: string };
 
 type Credentials = {
-  claudeAiOauth?: { accessToken?: unknown; refreshToken?: unknown; subscriptionType?: unknown; rateLimitTier?: unknown };
+  claudeAiOauth?: {
+    accessToken?: unknown;
+    refreshToken?: unknown;
+    subscriptionType?: unknown;
+    rateLimitTier?: unknown;
+  };
 };
 type Config = {
   oauthAccount?: { emailAddress?: unknown; userRateLimitTier?: unknown; organizationType?: unknown };

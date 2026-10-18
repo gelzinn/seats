@@ -11,7 +11,7 @@ import type { Seat, SeatKind } from "../types.ts";
 import { currentSeats, discoverWithSpinner } from "./list.ts";
 import { supervise } from "./run.ts";
 import { syncSeats } from "./sync.ts";
-import { KINDS, cancelIfNeeded, fail, formatSeat, tilde } from "./ui.ts";
+import { cancelIfNeeded, fail, formatSeat, KINDS, tilde } from "./ui.ts";
 
 /**
  * Makes `seat` the active one: writes its env for API/cloud seats, points the
@@ -62,8 +62,7 @@ async function pickSeat(seats: Seat[]): Promise<Seat> {
   const current = currentSeats().find((item) => item.target);
   const initial = seats.find(
     (seat) =>
-      seat.id === current?.target ||
-      (current?.targetPath && seat.dir && resolve(seat.dir) === current.targetPath),
+      seat.id === current?.target || (current?.targetPath && seat.dir && resolve(seat.dir) === current.targetPath),
   )?.id;
 
   const choice = await p.select({

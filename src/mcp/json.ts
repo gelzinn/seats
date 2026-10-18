@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeJsonAtomic } from "../fs.ts";
-import { compact, fromCommon, record, type Json } from "./convert.ts";
+import { compact, fromCommon, type Json, record } from "./convert.ts";
 import type { McpConfig, McpServer, McpServers } from "./types.ts";
 
 export function readJson(file: string): Json {
@@ -55,7 +55,8 @@ export function jsonMcp(options: {
     add(file, servers) {
       const data = readJson(file);
       const current = record(data[key]);
-      for (const [name, server] of Object.entries(servers)) current[name] = { ...options.toTool(server), ...server.options };
+      for (const [name, server] of Object.entries(servers))
+        current[name] = { ...options.toTool(server), ...server.options };
       writeJsonAtomic(file, { ...data, [key]: current });
     },
     remove(file, names) {

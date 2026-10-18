@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Seat, SeatSource } from "../../types.ts";
 
@@ -33,10 +33,7 @@ export const awsSeats: SeatSource = {
   kind: "cloud",
   async discover(home) {
     const awsDir = join(home, ".aws");
-    const profiles = new Set([
-      ...iniProfiles(join(awsDir, "credentials")),
-      ...iniProfiles(join(awsDir, "config")),
-    ]);
+    const profiles = new Set([...iniProfiles(join(awsDir, "credentials")), ...iniProfiles(join(awsDir, "config"))]);
     const seats = [...profiles].map((name) => profileSeat(name, awsDir));
 
     const ssoCache = join(awsDir, "sso", "cache");

@@ -3,8 +3,8 @@ import { basename } from "node:path";
 import { discoverSeatDirs, type SeatDir } from "./home-dirs.ts";
 import { seatSources } from "./providers/index.ts";
 
-export type { SeatDir };
 export { seatsHome } from "./store.ts";
+export type { SeatDir };
 
 const source = (provider: string) => seatSources.find((item) => item.id === provider);
 
@@ -32,11 +32,7 @@ export function seatDirEnv(provider: string, dir: string): Record<string, string
  * Env that launches `provider`'s CLI on the `<provider>:<slug>` seat, such as
  * `CLAUDE_CONFIG_DIR`. Undefined when the seat is missing or the CLI has no such variable.
  */
-export function seatEnv(
-  provider: string,
-  slug: string,
-  home = homedir(),
-): Record<string, string> | undefined {
+export function seatEnv(provider: string, slug: string, home = homedir()): Record<string, string> | undefined {
   const dir = seatDir(provider, slug, home);
   if (!dir) return undefined;
   const env = seatDirEnv(provider, dir);

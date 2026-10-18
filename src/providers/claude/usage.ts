@@ -15,7 +15,11 @@ export function parseClaudeUsage(body: unknown): Usage | undefined {
   for (const [name, raw] of Object.entries(body as Record<string, Window | null>)) {
     if (!raw || typeof raw !== "object" || typeof raw.utilization !== "number") continue;
     const resetsAt = typeof raw.resets_at === "string" ? new Date(raw.resets_at) : undefined;
-    windows.push({ name, usedPercent: raw.utilization, resetsAt: resetsAt && !Number.isNaN(+resetsAt) ? resetsAt : undefined });
+    windows.push({
+      name,
+      usedPercent: raw.utilization,
+      resetsAt: resetsAt && !Number.isNaN(+resetsAt) ? resetsAt : undefined,
+    });
   }
   return windows.length > 0 ? { windows } : undefined;
 }

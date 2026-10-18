@@ -1,13 +1,4 @@
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  rmdirSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { isInside, isSymlink, lexists, linkTarget, moveTree, replaceSymlink } from "./fs.ts";
 
@@ -142,8 +133,7 @@ export function shareItems(seatDirs: string[], sharedRoot: string, items: string
       if (isSymlink(link)) {
         const target = linkTarget(link);
         if (target === shared) continue;
-        const userManaged =
-          existsSync(link) && target && !seatDirs.some((seat) => isInside(target, seat));
+        const userManaged = existsSync(link) && target && !seatDirs.some((seat) => isInside(target, seat));
         if (userManaged) continue;
       }
       mkdirSync(dirname(link), { recursive: true });
