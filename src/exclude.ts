@@ -26,7 +26,10 @@ export function findSeatFolder(home: string, id: string): SeatFolder {
   const folders = allFolders(home).filter((folder) => folder.source.sharedItems);
   const found = folders.find((folder) => folder.id === id);
   if (found) return found;
-  const known = folders.map((folder) => folder.id).join(", ");
+  const known = folders
+    .map((folder) => folder.id)
+    .sort()
+    .join(", ");
   throw new Error(`No seat named ${id}.${known ? ` Seats: ${known}.` : ""}`);
 }
 
