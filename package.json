@@ -1,6 +1,6 @@
 {
   "name": "seats",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Switch the active AI seat from your terminal. Interactive picker for CLI tools, API keys and cloud profiles.",
   "keywords": [
     "cli",
