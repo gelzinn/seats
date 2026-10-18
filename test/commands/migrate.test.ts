@@ -38,9 +38,7 @@ describe("migrate", () => {
     expect(readlinkSync(join(home, ".claude.json"))).toBe(".config/seats/claude/primary/.claude.json");
     expect(readFileSync(join(store, "secondary/skills/x/SKILL.md"), "utf8")).toBe("x");
     expect(readFileSync(join(store, "primary/skills/deslop/SKILL.md"), "utf8")).toBe("deslop");
-    expect(readFileSync(join(store, "primary/settings.json"), "utf8")).toContain(
-      `${store}/primary/statusline.sh`,
-    );
+    expect(readFileSync(join(store, "primary/settings.json"), "utf8")).toContain(`${store}/primary/statusline.sh`);
   });
 
   test("blocks a move when the destination exists", () => {

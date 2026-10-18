@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import pc from "picocolors";
@@ -29,7 +29,9 @@ export function planMigration(home: string): Move[] {
 
 function symlinksIn(dir: string): string[] {
   try {
-    return readdirSync(dir).map((name) => join(dir, name)).filter(isSymlink);
+    return readdirSync(dir)
+      .map((name) => join(dir, name))
+      .filter(isSymlink);
   } catch {
     return [];
   }
@@ -37,10 +39,7 @@ function symlinksIn(dir: string): string[] {
 
 /** Symlinks that may point into a seat folder: live paths and links inside seat folders. */
 function candidateLinks(home: string): string[] {
-  const links = liveSources().flatMap((source) => [
-    source.livePath!(home),
-    ...(source.extraLivePaths?.(home) ?? []),
-  ]);
+  const links = liveSources().flatMap((source) => [source.livePath!(home), ...(source.extraLivePaths?.(home) ?? [])]);
   for (const source of liveSources()) {
     for (const { dir } of seatDirsOf(home, source)) {
       links.push(...symlinksIn(dir), ...symlinksIn(join(dir, "plugins")));

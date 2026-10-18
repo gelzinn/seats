@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { tempHome } from "../helpers/temp-home.ts";
-import { mcpAdapters } from "../../src/providers/index.ts";
 import { libraryFile, readLibrary, syncMcp } from "../../src/mcp/library.ts";
+import { mcpAdapters } from "../../src/providers/index.ts";
+import { tempHome } from "../helpers/temp-home.ts";
 
 let env: ReturnType<typeof tempHome>;
 afterEach(() => env?.cleanup());
@@ -26,7 +26,10 @@ describe("syncMcp", () => {
     const report = syncMcp(home, { adapters });
     expect(report.imported.sort()).toEqual(["docs", "local", "sentry"]);
 
-    const codex = Bun.TOML.parse(readFileSync(join(home, ".codex/config.toml"), "utf8")) as any;
+    const codex = Bun.TOML.parse(readFileSync(join(home, ".codex/config.toml"), "utf8")) as {
+      model?: string;
+      mcp_servers: Record<string, Record<string, unknown>>;
+    };
     expect(codex.model).toBe("gpt");
     expect(codex.mcp_servers.docs).toEqual({ command: "npx", args: ["-y", "docs-mcp"], env: { TOKEN: "t" } });
     expect(codex.mcp_servers.sentry).toEqual({
@@ -54,13 +57,11 @@ describe("syncMcp", () => {
     env = tempHome();
     const { home, write } = env;
     write(".cursor/mcp.json", { mcpServers: { docs: { command: "npx" } } });
-    write(".codex/config.toml", '[mcp_servers.docs]\nsomething_new = true\n');
+    write(".codex/config.toml", "[mcp_servers.docs]\nsomething_new = true\n");
 
     const report = syncMcp(home, { adapters });
     expect(report.added).not.toContain("codex: docs");
-    expect(readFileSync(join(home, ".codex/config.toml"), "utf8")).toBe(
-      '[mcp_servers.docs]\nsomething_new = true\n',
-    );
+    expect(readFileSync(join(home, ".codex/config.toml"), "utf8")).toBe("[mcp_servers.docs]\nsomething_new = true\n");
   });
 
   test("treats names that differ only in case as the same server", () => {
@@ -118,8 +119,6 @@ describe("syncMcp", () => {
   test("warns about Codex credentials other tools can't use", () => {
     env = tempHome();
     env.write(".codex/config.toml", '[mcp_servers.api]\nurl = "https://x"\nbearer_token_env_var = "API_TOKEN"\n');
-    expect(syncMcp(env.home, { adapters, dryRun: true }).warnings).toEqual([
-      "codex: api (credentials stay in codex)",
-    ]);
+    expect(syncMcp(env.home, { adapters, dryRun: true }).warnings).toEqual(["codex: api (credentials stay in codex)"]);
   });
 });

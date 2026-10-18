@@ -24,7 +24,10 @@
     "start": "bun src/cli.ts",
     "build": "bun build src/cli.ts --outfile dist/cli.js --target bun --minify && bun build src/lib.ts --outfile dist/lib.js --target node",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "check": "bun run lint && bun run typecheck && bun test"
   },
   "engines": {
     "node": ">=22"
@@ -34,6 +37,7 @@
     "picocolors": "^1.1.1"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@types/bun": "^1.2.0",
     "@types/node": "^22.13.10",
     "typescript": "^5.8.2"

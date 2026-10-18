@@ -22,7 +22,12 @@ describe("parseCodexUsage", () => {
   test("reads the primary and secondary windows", () => {
     const now = Date.parse("2030-01-01T12:00:00Z");
     const usage = parseCodexUsage(
-      { rate_limit: { primary_window: { used_percent: 100, reset_after_seconds: 3600 }, secondary_window: { used_percent: 30, reset_at: 1893520800 } } },
+      {
+        rate_limit: {
+          primary_window: { used_percent: 100, reset_after_seconds: 3600 },
+          secondary_window: { used_percent: 30, reset_at: 1893520800 },
+        },
+      },
       now,
     );
     expect(usage?.windows).toEqual([

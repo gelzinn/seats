@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, lstatSync, readFileSync, readdirSync, symlinkSync, utimesSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, symlinkSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import { shareItems } from "../src/share.ts";
 import { tempHome } from "./helpers/temp-home.ts";
@@ -75,11 +75,9 @@ describe("shareItems", () => {
     age(older, 60);
     write("b/plugins/installed_plugins.json", { version: 2, plugins: { "docs@official": [] } });
 
-    const report = shareItems(
-      [join(home, "a"), join(home, "b")],
-      join(home, "shared"),
-      ["plugins/installed_plugins.json"],
-    );
+    const report = shareItems([join(home, "a"), join(home, "b")], join(home, "shared"), [
+      "plugins/installed_plugins.json",
+    ]);
 
     expect(JSON.parse(readFileSync(join(home, "a/plugins/installed_plugins.json"), "utf8"))).toEqual({
       version: 2,

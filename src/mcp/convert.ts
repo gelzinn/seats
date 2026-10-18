@@ -39,11 +39,7 @@ export function fromCommon(raw: unknown, urlKeys = ["url"]): McpServer | undefin
   if (!command && !url) return undefined;
 
   const declared = text(entry.type);
-  const type: McpServer["type"] = command
-    ? "stdio"
-    : declared === "sse"
-      ? "sse"
-      : "http";
+  const type: McpServer["type"] = command ? "stdio" : declared === "sse" ? "sse" : "http";
 
   return compact({
     type,

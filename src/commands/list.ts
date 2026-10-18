@@ -8,7 +8,7 @@ import { discoverSeatDirs } from "../home-dirs.ts";
 import { seatSources } from "../providers/index.ts";
 import { activeMetaFile, readActiveMeta } from "../store.ts";
 import type { Seat, SeatKind } from "../types.ts";
-import { KINDS, fail, formatSeat, intro } from "./ui.ts";
+import { fail, formatSeat, intro, KINDS } from "./ui.ts";
 
 const real = (path: string) => (existsSync(path) ? realpathSync(path) : path);
 

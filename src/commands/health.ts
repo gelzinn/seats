@@ -13,12 +13,21 @@ const TIMEOUT_MS = 120_000;
 export type Output = { code: number; stdout: string; stderr: string; timedOut: boolean };
 
 /** Runs a CLI with captured output, killing it after `timeoutMs`. */
-export type Capture = (command: string, args: string[], env: Record<string, string>, timeoutMs: number) => Promise<Output>;
+export type Capture = (
+  command: string,
+  args: string[],
+  env: Record<string, string>,
+  timeoutMs: number,
+) => Promise<Output>;
 
 export const capture: Capture = (command, args, env, timeoutMs) =>
   new Promise((resolve) => {
     // A temp cwd keeps project files (CLAUDE.md, AGENTS.md) out of the question.
-    const child = spawn(command, args, { cwd: tmpdir(), env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, args, {
+      cwd: tmpdir(),
+      env: { ...process.env, ...env },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let stdout = "";
     let stderr = "";
     let timedOut = false;
@@ -48,7 +57,13 @@ export type Health = {
   model?: string;
 };
 
-const lastLine = (text: string) => text.trim().split("\n").map((line) => line.trim()).filter(Boolean).at(-1) ?? "";
+const lastLine = (text: string) =>
+  text
+    .trim()
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .at(-1) ?? "";
 
 /** The `"message"` inside an API error dumped as JSON, else the text as is. */
 const readable = (text: string) => text.match(/"message"\s*:\s*"((?:[^"\\]|\\.)+)"/)?.[1] ?? text;
@@ -67,7 +82,13 @@ export async function checkSeat(seat: Seat, run: Capture = capture, timeoutMs = 
   if (output.timedOut) return { seat, status: "error", reply: `no reply in ${timeoutMs / 1000}s`, ms, model };
   const reply = lastLine(output.stdout);
   if (output.code !== 0) {
-    return { seat, status: "error", reply: readable(reply || lastLine(output.stderr)) || `exit ${output.code}`, ms, model };
+    return {
+      seat,
+      status: "error",
+      reply: readable(reply || lastLine(output.stderr)) || `exit ${output.code}`,
+      ms,
+      model,
+    };
   }
   return { seat, status: /^ok\W*$/i.test(reply) ? "ok" : "unexpected", reply: reply || "(empty reply)", ms, model };
 }
@@ -106,9 +127,18 @@ export async function healthCommand([filter]: string[]): Promise<void> {
     Math.max(header.length, ...values.map((value) => value?.length ?? 1));
   const time = ({ ms, model }: Health) => `${(ms / 1000).toFixed(1)}s · ${model ?? "default model"}`;
   const fixed =
-    widest("Seat", seats.map((seat) => seat.id)) +
-    widest("Account", seats.map((seat) => seat.email)) +
-    widest("Plan", seats.map((seat) => seat.plan)) +
+    widest(
+      "Seat",
+      seats.map((seat) => seat.id),
+    ) +
+    widest(
+      "Account",
+      seats.map((seat) => seat.email),
+    ) +
+    widest(
+      "Plan",
+      seats.map((seat) => seat.plan),
+    ) +
     widest("Time", results.map(time));
   const replyWidth = Math.max(20, (process.stdout.columns || 120) - fixed - 16);
   const rows = results.map((result) => [

@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, symlinkSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync, symlinkSync } from "node:fs";
 import { join, relative } from "node:path";
 import {
   installMcp,
   installSkill,
+  type Outcome,
   parseInstallMcp,
   uninstallMcp,
   uninstallSkill,
-  type Outcome,
 } from "../../src/commands/install.ts";
 import { syncAll } from "../../src/commands/sync.ts";
 import { readLibrary, syncMcp } from "../../src/mcp/library.ts";
@@ -41,7 +41,13 @@ function installTools(): void {
 
 const read = (path: string) => readFileSync(join(env.home, path), "utf8");
 const json = (path: string) => JSON.parse(read(path));
-const codex = () => Bun.TOML.parse(read(".codex/config.toml")) as any;
+/** The parts of Codex's config.toml these tests read. */
+type CodexConfig = {
+  model?: string;
+  projects?: Record<string, unknown>;
+  mcp_servers: Record<string, Record<string, unknown>>;
+};
+const codex = () => Bun.TOML.parse(read(".codex/config.toml")) as CodexConfig;
 const statuses = (outcomes: Outcome[]) => Object.fromEntries(outcomes.map((item) => [item.where, item.status]));
 
 /** Every path under `dir` with its content, link text or "dir", to prove nothing changed. */
@@ -86,7 +92,10 @@ describe("installMcp", () => {
     expect(read(".codex/config.toml").startsWith(CODEX)).toBe(true);
     expect(codex().projects).toEqual({ "/repo": { trust_level: "trusted" } });
     expect(codex().mcp_servers.docs).toEqual(common);
-    expect(json(".cursor/mcp.json").mcpServers).toEqual({ github: { url: "https://api.example.com/mcp" }, docs: common });
+    expect(json(".cursor/mcp.json").mcpServers).toEqual({
+      github: { url: "https://api.example.com/mcp" },
+      docs: common,
+    });
     expect(json(".gemini/settings.json")).toEqual({ theme: "dark", mcpServers: { docs: common } });
     expect(json(".gemini/config/mcp_config.json").mcpServers.docs).toEqual(common);
     expect(json(".config/opencode/opencode.json").mcp.docs).toEqual({
@@ -121,9 +130,15 @@ describe("installMcp", () => {
 
     const outcomes = installMcp(env.home, "stream", { type: "sse", url: "https://stream.example.com/sse" });
 
-    expect(outcomes.find((item) => item.where === "codex")).toMatchObject({ status: "skipped", reason: "codex doesn't run sse servers" });
+    expect(outcomes.find((item) => item.where === "codex")).toMatchObject({
+      status: "skipped",
+      reason: "codex doesn't run sse servers",
+    });
     expect(read(".codex/config.toml")).toBe(CODEX);
-    expect(json(".gemini/settings.json").mcpServers.stream).toEqual({ type: "sse", url: "https://stream.example.com/sse" });
+    expect(json(".gemini/settings.json").mcpServers.stream).toEqual({
+      type: "sse",
+      url: "https://stream.example.com/sse",
+    });
   });
 
   test("leaves a tool's own server by that name alone, unless forced", () => {
@@ -342,7 +357,9 @@ describe("installSkill", () => {
     const repo = join(env.home, "repo");
 
     expect(() => installSkill(env.home, repo)).toThrow("holds 2 skills: deploy, review. Pick one with --skill <name>.");
-    expect(() => installSkill(env.home, repo, { skill: "missing" })).toThrow("has no skill named missing. It has: deploy, review.");
+    expect(() => installSkill(env.home, repo, { skill: "missing" })).toThrow(
+      "has no skill named missing. It has: deploy, review.",
+    );
 
     const { name } = installSkill(env.home, repo, { skill: "review" });
     expect(name).toBe("review");
@@ -364,7 +381,11 @@ describe("installSkill", () => {
     // No global or system git config: the test neither reads nor depends on the developer's.
     const gitEnv = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
     const identity = ["-c", "user.name=seats", "-c", "user.email=you@work.example", "-c", "commit.gpgsign=false"];
-    for (const args of [["init", "-q"], ["add", "."], ["commit", "-q", "-m", "skill"]]) {
+    for (const args of [
+      ["init", "-q"],
+      ["add", "."],
+      ["commit", "-q", "-m", "skill"],
+    ]) {
       expect(Bun.spawnSync(["git", "-C", repo, ...identity, ...args], { env: gitEnv }).exitCode).toBe(0);
     }
 
@@ -441,7 +462,7 @@ describe("uninstallSkill", () => {
 });
 
 describe("tool options (--set)", () => {
-  const codexToml = () => Bun.TOML.parse(readFileSync(join(env.home, ".codex/config.toml"), "utf8")) as any;
+  const codexToml = () => Bun.TOML.parse(readFileSync(join(env.home, ".codex/config.toml"), "utf8")) as CodexConfig;
 
   test("go only into the named tool, in its format, and stay in the library", () => {
     env = tempHome();
@@ -471,7 +492,12 @@ describe("tool options (--set)", () => {
     expect(codexToml().mcp_servers.docs.startup_timeout_sec).toBe(30);
 
     installMcp(env.home, "docs", server, { adapters: mcpAdapters, force: true });
-    expect(codexToml().mcp_servers.docs).toEqual({ command: "npx", args: ["-y", "docs-mcp"], env: { TOKEN: "t" }, startup_timeout_sec: 30 });
+    expect(codexToml().mcp_servers.docs).toEqual({
+      command: "npx",
+      args: ["-y", "docs-mcp"],
+      env: { TOKEN: "t" },
+      startup_timeout_sec: 30,
+    });
   });
 });
 
@@ -481,7 +507,7 @@ describe("parseInstallMcp", () => {
       "docs",
       "--set",
       "codex.startup_timeout_sec=30",
-      "--set=copilot.tools=[\"docs_search\"]",
+      '--set=copilot.tools=["docs_search"]',
       "--set",
       "gemini.trust=true",
       "--set",
@@ -495,12 +521,18 @@ describe("parseInstallMcp", () => {
       gemini: { trust: true },
       cursor: { note: "a=b" },
     });
-    expect(() => parseInstallMcp(["docs", "--set", "codex=30", "--", "docs-mcp"])).toThrow("Expected --set tool.key=value");
-    expect(() => parseInstallMcp(["docs", "--set", "acme.timeout=3", "--", "docs-mcp"])).toThrow('doesn\'t write MCP config for "acme"');
+    expect(() => parseInstallMcp(["docs", "--set", "codex=30", "--", "docs-mcp"])).toThrow(
+      "Expected --set tool.key=value",
+    );
+    expect(() => parseInstallMcp(["docs", "--set", "acme.timeout=3", "--", "docs-mcp"])).toThrow(
+      'doesn\'t write MCP config for "acme"',
+    );
   });
 
   test("reads a local server; the server's own args after -- stay as they are", () => {
-    expect(parseInstallMcp(["docs", "--env", "TOKEN=a=b", "--dry-run", "--", "npx", "-y", "docs-mcp", "--env", "prod"])).toEqual({
+    expect(
+      parseInstallMcp(["docs", "--env", "TOKEN=a=b", "--dry-run", "--", "npx", "-y", "docs-mcp", "--env", "prod"]),
+    ).toEqual({
       name: "docs",
       force: false,
       dryRun: true,
@@ -511,7 +543,20 @@ describe("parseInstallMcp", () => {
 
   test("takes --env KEY=VALUE, --force and --dry-run at the end of the command as seats' own", () => {
     expect(
-      parseInstallMcp(["docs", "--env", "A=1", "--", "npx", "-y", "docs-mcp", "--env", "B=2", "--env", "C=3", "--dry-run"]),
+      parseInstallMcp([
+        "docs",
+        "--env",
+        "A=1",
+        "--",
+        "npx",
+        "-y",
+        "docs-mcp",
+        "--env",
+        "B=2",
+        "--env",
+        "C=3",
+        "--dry-run",
+      ]),
     ).toEqual({
       name: "docs",
       force: false,
@@ -524,7 +569,15 @@ describe("parseInstallMcp", () => {
 
   test("reads a remote server", () => {
     expect(
-      parseInstallMcp(["github", "--url", "https://api.example.com/mcp", "--header", "Authorization: Bearer t", "--sse", "--force"]),
+      parseInstallMcp([
+        "github",
+        "--url",
+        "https://api.example.com/mcp",
+        "--header",
+        "Authorization: Bearer t",
+        "--sse",
+        "--force",
+      ]),
     ).toEqual({
       name: "github",
       force: true,

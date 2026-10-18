@@ -11,9 +11,27 @@ const levels = (...names: string[]) => names.map((effort) => ({ effort }));
 /** Shaped like Codex's models_cache.json. */
 const cache = {
   models: [
-    { slug: "big-2", description: "Most capable model.", visibility: "list", priority: 1, supported_reasoning_levels: levels("low", "high") },
-    { slug: "small-2", description: "Fast and affordable model for easier tasks.", visibility: "list", priority: 4, supported_reasoning_levels: levels("low", "medium") },
-    { slug: "small-1", description: "Older fast and efficient model.", visibility: "list", priority: 9, supported_reasoning_levels: levels("minimal", "low") },
+    {
+      slug: "big-2",
+      description: "Most capable model.",
+      visibility: "list",
+      priority: 1,
+      supported_reasoning_levels: levels("low", "high"),
+    },
+    {
+      slug: "small-2",
+      description: "Fast and affordable model for easier tasks.",
+      visibility: "list",
+      priority: 4,
+      supported_reasoning_levels: levels("low", "medium"),
+    },
+    {
+      slug: "small-1",
+      description: "Older fast and efficient model.",
+      visibility: "list",
+      priority: 9,
+      supported_reasoning_levels: levels("minimal", "low"),
+    },
     { slug: "internal-mini", description: "Internal.", visibility: "hide", priority: 0 },
   ],
 };

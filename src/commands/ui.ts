@@ -1,4 +1,5 @@
 import { homedir } from "node:os";
+import { stripVTControlCharacters } from "node:util";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import type { Seat, SeatKind } from "../types.ts";
@@ -32,7 +33,7 @@ export function formatSeat(seat: Seat): string {
   return `${pc.dim(seat.kind)}  ${pc.cyan(seat.provider)} · ${seat.label}${who}`;
 }
 
-const visibleLength = (text: string) => text.replace(/\x1b\[[0-9;]*m/g, "").length;
+const visibleLength = (text: string) => stripVTControlCharacters(text).length;
 const pad = (text: string, width: number) => text + " ".repeat(Math.max(0, width - visibleLength(text)));
 
 /** A boxed table with a bold header row. Cells may contain colors. */

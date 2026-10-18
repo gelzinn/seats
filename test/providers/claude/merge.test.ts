@@ -47,10 +47,9 @@ describe("mergeClaudeState", () => {
   });
 
   test("adds missing user MCP servers without overriding existing ones", () => {
-    const merged = mergeClaudeState(
-      { mcpServers: { sentry: { type: "http", url: "mine" } } },
-      [{ mcpServers: { sentry: { type: "http", url: "theirs" }, docs: { type: "stdio" } } }],
-    )!;
+    const merged = mergeClaudeState({ mcpServers: { sentry: { type: "http", url: "mine" } } }, [
+      { mcpServers: { sentry: { type: "http", url: "theirs" }, docs: { type: "stdio" } } },
+    ])!;
     expect(merged.mcpServers).toEqual({
       sentry: { type: "http", url: "mine" },
       docs: { type: "stdio" },
