@@ -80,6 +80,8 @@ seats auto-switch on     # off by default: move to the next seat when one hits i
 seats use api:openrouter
 seats health             # ask every seat to reply and see which ones work
 seats add claude work    # sign a new account in, without touching the active one
+seats rename claude:primary work   # rename a seat's folder
+seats remove claude:old  # sign it out and delete its folder
 seats sync --dry-run     # preview what sync would share, add or link
 seats sync               # share config between seats and across tools
 seats install mcp docs -- npx -y docs-mcp   # add an MCP server to every tool
@@ -164,6 +166,15 @@ seats add codex personal -- --device-auth   # extra args go to the tool's login
 seats creates `~/.config/seats/<tool>/<name>` and runs the tool's own sign-in there. You get the link, open it in any browser, and paste the code back into the terminal when asked. If sign-in doesn't finish, the folder is removed. Naming a seat that already exists but is signed out signs it in again in place, keeping its files; a seat that's still signed in is left alone. Once you're in, the new seat picks up the settings, skills and MCP servers your other seats share, and seats offers to switch to it.
 
 `seats add` works with Claude Code and Codex, which keep each login inside its own folder. Copilot stores its token in the system keyring, Gemini CLI signs in on first run and Kiro doesn't document where its login lives, so sign in to those with the tool itself.
+
+**Rename or remove a seat** by its id:
+
+```bash
+seats rename claude:primary work   # ~/.config/seats/claude/primary → …/work
+seats remove claude:old            # asks first; --yes skips the question
+```
+
+`rename` moves the folder, repoints `~/.claude` and `~/.claude.json` when it's the active seat, and rewrites paths in `settings.json`. `remove` runs the tool's own logout (`claude auth logout`, `codex logout`) and then deletes the folder; `--keep-login` skips the logout. Shared config is untouched, since the seat only holds links to it. Both refuse while a `claude` or `codex` session is running on that seat, because the session keeps writing to the folder. `remove` also refuses the active seat: switch away with `seats use` first. Anything outside seats that sets `CLAUDE_CONFIG_DIR` or `CODEX_HOME` to the old folder needs updating by hand.
 
 **Already have `~/.claude-work`-style folders?** They are still discovered. To move them into the store:
 

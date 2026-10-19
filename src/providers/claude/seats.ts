@@ -43,6 +43,7 @@ export const claudeSeats: SeatSource = {
     signedIn: (dir) => claudeAccount(dir) !== undefined,
     // Its own prompt echoes nothing, so a paste looks like it didn't land.
     codePrompt: "Paste code here if prompted >",
+    logoutArgs: ["auth", "logout"],
   },
   usage: claudeUsage,
   failover: claudeFailover,

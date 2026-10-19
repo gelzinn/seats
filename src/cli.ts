@@ -5,6 +5,7 @@ import { addCommand } from "./commands/add.ts";
 import { healthCommand } from "./commands/health.ts";
 import { installCommand, uninstallCommand } from "./commands/install.ts";
 import { currentCommand, listCommand } from "./commands/list.ts";
+import { removeCommand, renameCommand } from "./commands/manage.ts";
 import { migrateCommand } from "./commands/migrate.ts";
 import { autoSwitchCommand, hookCommand, runCommand } from "./commands/run.ts";
 import { pickCommand, useCommand } from "./commands/switch.ts";
@@ -29,6 +30,11 @@ Usage:
   seats add [tool] [name]
                         Sign a new account in (claude | codex) without touching
                         the active one. Args after -- go to the tool's login.
+  seats rename <id> <name>
+                        Rename a seat's folder (claude | codex), repointing the
+                        live paths when it's the active seat
+  seats remove <id>     Sign the account out and delete its folder (--yes to
+                        skip the question, --keep-login to skip the sign-out)
   seats sync            Share config and trust between seats, and MCP servers,
                         skills and instructions across tools (--dry-run to preview)
   seats install mcp <name> -- <command> [args...] [--env KEY=VALUE ...]
@@ -56,6 +62,8 @@ Examples:
   seats auto-switch on
   seats add claude work
   seats add codex personal -- --device-auth
+  seats rename claude:primary work
+  seats remove claude:old
   seats install mcp docs -- npx -y docs-mcp
   seats install skill ./review --dry-run
   seats uninstall mcp docs
@@ -79,6 +87,8 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   install: installCommand,
   list: listCommand,
   migrate: migrateCommand,
+  remove: removeCommand,
+  rename: renameCommand,
   run: runCommand,
   sync: syncCommand,
   uninstall: uninstallCommand,

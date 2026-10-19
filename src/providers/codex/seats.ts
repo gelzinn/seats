@@ -36,6 +36,7 @@ export const codexSeats: SeatSource = {
   login: {
     args: ["login"],
     signedIn: (dir) => exists(dir, "auth.json"),
+    logoutArgs: ["logout"],
   },
   health: codexHealth,
   usage: codexUsage,
