@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, readFileSync, symlinkSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import {
   activeSeat,
@@ -153,6 +153,7 @@ function fakeClaude(): string {
     "bin/claude",
     `#!/bin/bash
 echo "$(basename "$CLAUDE_CONFIG_DIR")|$*|\${SEATS_LIMIT_MARKER:+marker}" >> "$FAKE_LOG"
+pwd > "$FAKE_DIR/launched-in"
 case "$FAKE_MODE:$(basename "$CLAUDE_CONFIG_DIR")" in
   limit:work|passing:work)
     touch "$FAKE_DIR/$FAKE_MODE-reported"
@@ -204,6 +205,25 @@ describe("supervise", () => {
     expect(second![0]).toBe("personal");
     expect(second![1]).toEndWith(`--resume s1 ${CONTINUE_PROMPT}`);
     expect(readFileSync(join(seat("personal").dir!, "projects/-repo/s1.jsonl"), "utf8")).toBe('{"type":"user"}\n');
+  });
+
+  test("launches in the folder it's given, so --resume finds a session from there", async () => {
+    const log = fakeClaude();
+    mkdirSync(join(env.home, "repo"));
+    const folder = realpathSync(join(env.home, "repo"));
+    const work = seat("work");
+    const code = await supervise({
+      home: env.home,
+      source: claude,
+      seats: [work],
+      start: work,
+      args: ["--resume", "s1"],
+      autoSwitch: false,
+      cwd: folder,
+    });
+    expect(code).toBe(0);
+    expect(launches(log)).toEqual(["work|--resume s1|"]);
+    expect(readFileSync(join(env.home, "launched-in"), "utf8").trim()).toBe(folder);
   });
 
   test("leaves the session alone on a passing 429", async () => {

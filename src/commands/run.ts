@@ -92,9 +92,11 @@ export function copyTranscript(transcript: string, fromDir: string, toDir: strin
   if (!existsSync(from) || !isInside(from, seatDir)) return undefined;
   const to = join(toDir, relative(seatDir, from));
   mkdirSync(dirname(to), { recursive: true });
-  cpSync(from, to);
+  // Keeping mtimes keeps the conversation where it was in the list of recent ones.
+  cpSync(from, to, { preserveTimestamps: true });
   const folder = from.replace(/\.jsonl$/, "");
-  if (folder !== from && existsSync(folder)) cpSync(folder, to.replace(/\.jsonl$/, ""), { recursive: true });
+  if (folder !== from && existsSync(folder))
+    cpSync(folder, to.replace(/\.jsonl$/, ""), { recursive: true, preserveTimestamps: true });
   return to;
 }
 
@@ -169,6 +171,8 @@ export type SuperviseOptions = {
   autoSwitch: boolean;
   autoContinue?: boolean;
   usageOf?: UsageOf;
+  /** Folder to launch in, e.g. where a resumed session ran. Defaults to the current one. */
+  cwd?: string;
 };
 
 /**
@@ -208,7 +212,7 @@ export async function supervise(options: SuperviseOptions): Promise<number> {
   process.on("SIGINT", ignore);
   try {
     let args = options.args;
-    let cwd = process.cwd();
+    let cwd = options.cwd ?? process.cwd();
     for (;;) {
       const child = spawn(binary, [...(supervised ? failover.settingsArgs(settings) : []), ...args], {
         stdio: "inherit",

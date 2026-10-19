@@ -9,6 +9,7 @@ import { currentCommand, listCommand } from "./commands/list.ts";
 import { migrateCommand } from "./commands/migrate.ts";
 import { pinCommand, unpinCommand } from "./commands/pin.ts";
 import { autoSwitchCommand, hookCommand, runCommand } from "./commands/run.ts";
+import { moveCommand, sessionsCommand } from "./commands/sessions.ts";
 import { pickCommand, useCommand } from "./commands/switch.ts";
 import { syncCommand } from "./commands/sync.ts";
 import { usageCommand } from "./commands/usage.ts";
@@ -36,6 +37,12 @@ Usage:
   seats usage [tool|id] [--json]
                         Show each seat's 5-hour and weekly usage, without
                         sending a prompt (--json for scripts)
+  seats sessions [tool|id] [--all]
+                        Conversations from every Claude seat, newest first:
+                        this folder's, or every project's with --all
+  seats move <session> <seat>
+                        Copy a conversation to another seat (the original
+                        stays) and offer to reopen it there (--force to replace)
   seats add [tool] [name]
                         Sign a new account in (claude | codex) without touching
                         the active one. Args after -- go to the tool's login.
@@ -71,6 +78,8 @@ Examples:
   seats pin claude:work
   seats unpin claude
   seats auto-switch on
+  seats sessions --all
+  seats move 3f2a claude:work
   seats add claude work
   seats add codex personal -- --device-auth
   seats desktop open work
@@ -98,8 +107,10 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   install: installCommand,
   list: listCommand,
   migrate: migrateCommand,
+  move: moveCommand,
   pin: pinCommand,
   run: runCommand,
+  sessions: sessionsCommand,
   sync: syncCommand,
   uninstall: uninstallCommand,
   unpin: unpinCommand,

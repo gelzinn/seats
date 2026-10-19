@@ -76,6 +76,27 @@ export type SeatSource = {
     /** Args that reopen a session, optionally sending `prompt` first. */
     resumeArgs: (sessionId: string, prompt?: string) => string[];
   };
+  /**
+   * The conversations a seat keeps, for `seats sessions` and `seats move`.
+   * A session is one file that resumes from the same path in any seat.
+   */
+  sessions?: {
+    /** Conversations kept in the seat folder `dir`, in no particular order. */
+    list: (dir: string) => Session[];
+    /** Args that reopen a session. */
+    resumeArgs: (sessionId: string) => string[];
+  };
+};
+
+/** One conversation, read from the start and end of its transcript. */
+export type Session = {
+  id: string;
+  /** The transcript, inside the seat folder. */
+  file: string;
+  /** Folder the conversation ran in, as the transcript recorded it. */
+  cwd?: string;
+  title: string;
+  updatedAt: Date;
 };
 
 /** `label` is how the window is shown, e.g. "5h", "Week", "Week (opus)". Defaults to `name`. */

@@ -82,6 +82,8 @@ seats auto-switch on     # off by default: move to the next seat when one hits i
 seats use api:openrouter
 seats health             # ask every seat to reply and see which ones work
 seats usage              # every seat's 5-hour and weekly usage, without sending a prompt
+seats sessions           # conversations in this folder, from every Claude seat
+seats move 3f2a claude:work   # copy one to another seat and pick it up there
 seats add claude work    # sign a new account in, without touching the active one
 seats desktop open work  # Claude Desktop on another account, beside the ones already open
 seats sync --dry-run     # preview what sync would share, add or link
@@ -201,6 +203,36 @@ Things to know:
 - **Claude Code sessions inside the app** still read `~/.claude`, which is your active CLI seat.
 - `--user-data-dir` is a standard Electron flag, but Claude Desktop doesn't document it. If a future release ignores it, this stops working.
 - The Codex desktop app isn't supported yet.
+
+## Continue a conversation on another seat
+
+Each seat keeps its own history, so `claude --resume` on one account doesn't show what you were doing on another. `seats sessions` lists conversations from every Claude seat, newest first:
+
+```text
+┌─────────────────┬────────┬────────────┬───────────────────────────────┬──────────┐
+│ Seat            │ When   │ Project    │ Title                         │ Id       │
+├─────────────────┼────────┼────────────┼───────────────────────────────┼──────────┤
+│ claude:personal │ 5m ago │ ~/code/app │ Fix the login redirect        │ 3f2a9c1e │
+│ claude:work     │ 2h ago │ ~/code/app │ Add retries to the API client │ 8b41d0f7 │
+└─────────────────┴────────┴────────────┴───────────────────────────────┴──────────┘
+```
+
+- It shows the conversations of the folder you're in, the same ones `claude --resume` would list there. Add `--all` for every project. Pass a seat id to see one seat: `seats sessions claude:work`.
+- The title is the name you gave the conversation, or Claude's own title, or else your first message. Only the start and end of each transcript are read, so long conversations stay fast to list.
+- The 20 newest are shown, with a note when there are more.
+
+`seats move <id> <seat>` copies a conversation to another seat. The first characters of the id are enough; if they fit more than one conversation, seats lists them so you can type more.
+
+```bash
+seats move 3f2a claude:work
+seats move 3f2a claude:work --force   # replace a copy the seat already has
+```
+
+- It copies, nothing is moved away: the conversation stays on the seat it came from, and both can go on from there.
+- The transcript and its folder land at the same place inside the other seat, so `claude --resume` finds it there.
+- A seat that already has that conversation keeps its copy unless you add `--force`. Moving a conversation to the seat it's on is an error.
+- Afterwards seats prints the command that continues it, and in a terminal it asks "Open it now on claude:work?". Yes opens it on that seat with `claude --resume`, from the folder the conversation ran in. Your active seat doesn't change, and auto-switch stays out of this launch, so it opens on the seat you named.
+- Codex isn't supported yet: it isn't confirmed that copying its session file is enough for `codex resume` on another account.
 
 ## One folder for every seat
 
@@ -414,7 +446,7 @@ Seats never signs in for you and never sends credentials anywhere. Keys stay in 
 | `src/providers/index.ts` | The list of providers; everything else reads from it |
 | `src/providers/helpers/` | Code shared by several providers (seat folders, API keys) |
 | `src/cli.ts` | Help text and routing to the commands |
-| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `run` (`run`, `auto-switch`, the limit hook), `pin` (`pin`, `unpin`), `add`, `health`, `usage`, `sync`, `install` (`install`, `uninstall`), `migrate` |
+| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `run` (`run`, `auto-switch`, the limit hook), `pin` (`pin`, `unpin`), `sessions` (`sessions`, `move`), `add`, `health`, `usage`, `sync`, `install` (`install`, `uninstall`), `migrate` |
 | `src/home-dirs.ts`, `src/store.ts` | Finding and naming seat folders; the `~/.config/seats` layout and `active.env` |
 | `src/share.ts`, `src/skills.ts`, `src/instructions.ts` | Sharing files between seats, and skills and instructions across tools |
 | `src/mcp/` | The tool-neutral MCP library and the JSON helpers adapters build on |
