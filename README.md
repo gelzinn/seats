@@ -81,6 +81,7 @@ seats unpin claude
 seats auto-switch on     # off by default: move to the next seat when one hits its limit
 seats use api:openrouter
 seats health             # ask every seat to reply and see which ones work
+seats usage              # every seat's 5-hour and weekly usage, without sending a prompt
 seats add claude work    # sign a new account in, without touching the active one
 seats sync --dry-run     # preview what sync would share, add or link
 seats sync               # share config between seats and across tools
@@ -114,6 +115,22 @@ source ~/.config/seats/active.env
 ```
 
 It catches what switching wouldn't tell you: a seat that was signed out, hit its usage limit or points at a model the account can't use. The Plan column comes from what each tool already knows about the account (Claude's subscription and rate-limit tier, ChatGPT's plan for Codex). Each check is one tiny prompt on the cheapest model, whatever your config says: Haiku for Claude, and for Codex the newest small model in that account's model list, at its lowest reasoning effort. The Time column shows which model answered. It runs from a temporary folder so no project context is sent. Pass a tool or seat id to check fewer: `seats health codex`, `seats health claude:work`. The command exits with status 1 when any seat doesn't answer, so it works in scripts.
+
+`seats usage` shows how much of each Claude Code and Codex seat's limits is used, and when each window resets:
+
+```text
+┌─────────────────┬──────────────────────┬─────────┬──────────────────────┬────────────────────────┬─────────────┬──────────────────────────────────────────────────────────────────┐
+│ Seat            │ Account              │ Plan    │ 5h                   │ Week                   │ Week (opus) │ Note                                                             │
+├─────────────────┼──────────────────────┼─────────┼──────────────────────┼────────────────────────┼─────────────┼──────────────────────────────────────────────────────────────────┤
+│ claude:work     │ you@work.example     │ Max 20x │ 82% · resets in 1h12 │ 41% · resets Thu 09:00 │ 12%         │                                                                  │
+│ claude:personal │ you@personal.example │ Pro     │ 3% · resets in 4h40  │ 18% · resets Sat 14:00 │ —           │                                                                  │
+│ codex:work      │ you@work.example     │ Plus    │ —                    │ —                      │ —           │ token expired: open the seat once so its CLI refreshes the token │
+└─────────────────┴──────────────────────┴─────────┴──────────────────────┴────────────────────────┴─────────────┴──────────────────────────────────────────────────────────────────┘
+```
+
+It reads the same usage endpoints the tools' apps show, so it sends no prompt and spends no quota, and it changes nothing. A cell turns yellow at 80% and red at the limit. Codex's Free plan has a monthly window instead of a 5-hour one, and it shows as Month. A seat whose usage can't be read still gets a row that says why. seats never refreshes a token itself, so for an expired one, open that seat once and its CLI refreshes it. Pass a tool or seat id to read fewer, and `--json` to get the same data for a statusline or script. The command exits with status 0 even when a seat can't be read.
+
+Use `usage` to see which seat has room left. Use `health` when you need proof that a seat actually answers.
 
 ## Pick the seat per project
 
@@ -373,7 +390,7 @@ Seats never signs in for you and never sends credentials anywhere. Keys stay in 
 | `src/providers/index.ts` | The list of providers; everything else reads from it |
 | `src/providers/helpers/` | Code shared by several providers (seat folders, API keys) |
 | `src/cli.ts` | Help text and routing to the commands |
-| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `run` (`run`, `auto-switch`, the limit hook), `pin` (`pin`, `unpin`), `add`, `health`, `sync`, `install` (`install`, `uninstall`), `migrate` |
+| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `run` (`run`, `auto-switch`, the limit hook), `pin` (`pin`, `unpin`), `add`, `health`, `usage`, `sync`, `install` (`install`, `uninstall`), `migrate` |
 | `src/home-dirs.ts`, `src/store.ts` | Finding and naming seat folders; the `~/.config/seats` layout and `active.env` |
 | `src/share.ts`, `src/skills.ts`, `src/instructions.ts` | Sharing files between seats, and skills and instructions across tools |
 | `src/mcp/` | The tool-neutral MCP library and the JSON helpers adapters build on |
@@ -403,7 +420,7 @@ src/providers/acme/
 export const acme: Provider = {
   id: "acme",
   label: "Acme CLI",
-  seats: [acmeSeats], // `configDirEnv` plus `login` / `health` enable `seats add` / `seats health`
+  seats: [acmeSeats], // `configDirEnv` plus `login` / `health` enable `seats add` / `seats health`; `usage` enables `seats usage`
   mcp: acmeMcp,
   skills: [{ dir: (home) => ifDir(join(home, ".acme"), "skills") }],
   instructions: (home) => ifDir(join(home, ".acme"), "AGENTS.md"),
