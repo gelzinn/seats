@@ -86,6 +86,8 @@ seats sessions           # conversations in this folder, from every Claude seat
 seats move 3f2a claude:work   # copy one to another seat and pick it up there
 seats add claude work    # sign a new account in, without touching the active one
 seats desktop open work  # Claude Desktop on another account, beside the ones already open
+seats rename claude:primary work   # rename a seat's folder
+seats remove claude:old  # sign it out and delete its folder
 seats sync --dry-run     # preview what sync would share, add or link
 seats sync               # share config between seats and across tools
 seats exclude claude:acme CLAUDE.md   # give one seat its own copy of a shared item
@@ -268,6 +270,15 @@ seats add codex personal -- --device-auth   # extra args go to the tool's login
 seats creates `~/.config/seats/<tool>/<name>` and runs the tool's own sign-in there. You get the link, open it in any browser, and paste the code back into the terminal when asked. If sign-in doesn't finish, the folder is removed. Naming a seat that already exists but is signed out signs it in again in place, keeping its files; a seat that's still signed in is left alone. Once you're in, the new seat picks up the settings, skills and MCP servers your other seats share, and seats offers to switch to it.
 
 `seats add` works with Claude Code and Codex, which keep each login inside its own folder. Copilot stores its token in the system keyring, Gemini CLI signs in on first run and Kiro doesn't document where its login lives, so sign in to those with the tool itself.
+
+**Rename or remove a seat** by its id:
+
+```bash
+seats rename claude:primary work   # ~/.config/seats/claude/primary → …/work
+seats remove claude:old            # asks first; --yes skips the question
+```
+
+`rename` moves the folder, repoints `~/.claude` and `~/.claude.json` when it's the active seat, and rewrites paths in `settings.json`. `remove` runs the tool's own logout (`claude auth logout`, `codex logout`) and then deletes the folder; `--keep-login` skips the logout. Shared config is untouched, since the seat only holds links to it. Both refuse while a `claude` or `codex` session is running on that seat, because the session keeps writing to the folder. `remove` also refuses the active seat: switch away with `seats use` first. Anything outside seats that sets `CLAUDE_CONFIG_DIR` or `CODEX_HOME` to the old folder needs updating by hand.
 
 **Already have `~/.claude-work`-style folders?** They are still discovered. To move them into the store:
 
@@ -492,7 +503,7 @@ Seats never signs in for you and never sends credentials anywhere. Keys stay in 
 | `src/providers/index.ts` | The list of providers; everything else reads from it |
 | `src/providers/helpers/` | Code shared by several providers (seat folders, API keys) |
 | `src/cli.ts` | Help text and routing to the commands |
-| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `run` (`run`, `auto-switch`, the limit hook), `pin` (`pin`, `unpin`), `sessions` (`sessions`, `move`), `add`, `health`, `usage`, `sync`, `install` (`install`, `uninstall`), `migrate` |
+| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `run` (`run`, `auto-switch`, the limit hook), `pin` (`pin`, `unpin`), `sessions` (`sessions`, `move`), `manage` (`rename`, `remove`), `add`, `health`, `usage`, `sync`, `install` (`install`, `uninstall`), `migrate` |
 | `src/home-dirs.ts`, `src/store.ts` | Finding and naming seat folders; the `~/.config/seats` layout and `active.env` |
 | `src/share.ts`, `src/skills.ts`, `src/instructions.ts` | Sharing files between seats, and skills and instructions across tools |
 | `src/mcp/` | The tool-neutral MCP library and the JSON helpers adapters build on |

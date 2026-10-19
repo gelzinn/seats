@@ -62,7 +62,8 @@ function filesWithPaths(home: string): Set<string> {
   return files;
 }
 
-function repoint(home: string, from: string, to: string): void {
+/** Points links and `pathFiles` paths that lead into `from` at the same place inside `to`. */
+export function repoint(home: string, from: string, to: string): void {
   for (const link of candidateLinks(home)) {
     const target = linkTarget(link);
     if (!target || !isInside(target, from)) continue;

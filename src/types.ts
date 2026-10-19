@@ -62,6 +62,8 @@ export type SeatSource = {
      * seats asks for the code itself instead, showing what was pasted as `*`.
      */
     codePrompt?: string;
+    /** Args that sign the account out, run by `seats remove` before it deletes the folder. */
+    logoutArgs?: string[];
   };
   /**
    * How `seats health` asks a seat one short question, non-interactively, on
