@@ -34,8 +34,11 @@ export type SeatSource = {
   configDirEnv?: string;
   /** Paths inside a seat folder that every seat of this source shares. */
   sharedItems?: string[];
-  /** Merges per-seat state that can't be a shared file. Returns the files it rewrote. */
-  mergeSeats?: (dirs: string[]) => string[];
+  /**
+   * Merges per-seat state that can't be a shared file. Returns the files it
+   * rewrote. `keptOut(dir)` names the MCP servers that seat must not get.
+   */
+  mergeSeats?: (dirs: string[], keptOut?: (dir: string) => string[]) => string[];
   /** Seat files that may hold absolute paths to the seat folder, rewritten by `seats migrate`. */
   pathFiles?: string[];
   /**

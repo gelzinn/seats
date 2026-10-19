@@ -2,6 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { mergeClaudeState } from "../../../src/providers/claude/merge.ts";
 
 describe("mergeClaudeState", () => {
+  test("doesn't copy servers the target keeps out, in any case", () => {
+    const target = { mcpServers: { docs: { type: "http" } } };
+    const source = { mcpServers: { Gmail: { type: "stdio" }, search: { type: "http" } } };
+    const merged = mergeClaudeState(target, [source], ["gmail"])!;
+    expect(Object.keys(merged.mcpServers as object)).toEqual(["docs", "search"]);
+    expect(mergeClaudeState(target, [{ mcpServers: { gmail: {} } }], ["gmail"])).toBeUndefined();
+  });
+
   test("ORs trust flags and unions approvals", () => {
     const target = {
       oauthAccount: { emailAddress: "b@example.com" },

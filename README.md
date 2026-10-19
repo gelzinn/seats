@@ -88,6 +88,8 @@ seats add claude work    # sign a new account in, without touching the active on
 seats desktop open work  # Claude Desktop on another account, beside the ones already open
 seats sync --dry-run     # preview what sync would share, add or link
 seats sync               # share config between seats and across tools
+seats exclude claude:acme CLAUDE.md   # give one seat its own copy of a shared item
+seats exclude claude:acme mcp gmail   # keep an MCP server out of one seat
 seats install mcp docs -- npx -y docs-mcp   # add an MCP server to every tool
 seats uninstall mcp docs                    # and take it out of every tool
 seats migrate --dry-run  # preview moving ~/.<tool>-* into ~/.config/seats
@@ -310,6 +312,22 @@ When a tool has two or more seats, activating one of them, or running `seats syn
 - **`.claude.json`** is merged in place. Trust and approvals are only ever added, never revoked. An MCP server already defined in a seat is never overwritten. Everything else in the file is left alone. Writes go through the `~/.claude.json` symlink and keep mode `600`. A seat whose file doesn't parse is skipped.
 
 </details>
+
+### Keep something out of one seat
+
+Every seat of a tool gets the same CLAUDE.md, skills and MCP servers. A client's seat may need its own instructions, or no access to your personal mail server:
+
+```bash
+seats exclude claude:acme CLAUDE.md   # this seat gets its own CLAUDE.md
+seats exclude claude:acme mcp gmail   # and no gmail MCP server
+seats exclude claude:acme             # list what it keeps out
+seats include claude:acme CLAUDE.md   # share it again
+seats include claude:acme mcp gmail
+```
+
+- **A shared item** (any name from the table above, like `CLAUDE.md`, `skills` or `settings.json`) stops being a link. The seat gets a copy of the shared one, so nothing changes until you edit it; seats prints its path. From then on `seats sync`, switching seats and the sync across tools leave that copy alone, even while the seat is active. The choice is saved in `~/.config/seats/config.json`.
+- **An MCP server** is removed from that seat's `.claude.json`, and the seat id is added to the server's `skip` in `mcp.json` (`"skip": ["claude:acme"]`). Merging seats, `seats sync` and `seats install mcp` then never write it into that seat. This works for Claude seats, which keep their own MCP servers.
+- **`seats include`** undoes it. The seat's own copy moves aside as `<item>.seats-backup`, not into the shared one, since it may hold things the other seats shouldn't see. A server comes back on the next `seats sync` or switch.
 
 ## One setup across tools
 

@@ -50,6 +50,8 @@ export type SeatsConfig = {
   autoSwitch?: boolean;
   /** After a mid-session switch, send "continue" so the work goes on by itself. */
   autoContinue?: boolean;
+  /** Shared items each seat keeps its own copy of, by seat id: `{ "claude:acme": ["CLAUDE.md"] }`. */
+  exclude?: Record<string, string[]>;
 };
 
 export const configFile = (home: string) => join(seatsHome(home), "config.json");

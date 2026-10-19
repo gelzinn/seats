@@ -21,17 +21,19 @@ function union(base: string[], extra: string[]): string[] {
 
 /**
  * Carries folder trust, approved tools, approved `.mcp.json` servers and
- * user-scope MCP servers from other seats into `target`. Never revokes
- * anything and never touches account data. Returns undefined when unchanged.
+ * user-scope MCP servers from other seats into `target`, except the servers
+ * in `keptOut` (any case). Never revokes anything and never touches account
+ * data. Returns undefined when unchanged.
  */
-export function mergeClaudeState(target: Json, sources: Json[]): Json | undefined {
+export function mergeClaudeState(target: Json, sources: Json[], keptOut: string[] = []): Json | undefined {
   const projects = { ...record(target.projects) };
   const mcpServers = { ...record(target.mcpServers) };
+  const skipped = new Set(keptOut.map((name) => name.toLowerCase()));
   let changed = false;
 
   for (const source of sources) {
     for (const [name, server] of Object.entries(record(source.mcpServers))) {
-      if (name in mcpServers) continue;
+      if (name in mcpServers || skipped.has(name.toLowerCase())) continue;
       mcpServers[name] = server;
       changed = true;
     }
@@ -71,16 +73,19 @@ function readConfig(path: string): Json | undefined {
   }
 }
 
-/** Merges folder trust, approvals and user MCP servers across every seat's `.claude.json`. */
-export function mergeClaudeConfigs(dirs: string[]): string[] {
+/**
+ * Merges folder trust, approvals and user MCP servers across every seat's
+ * `.claude.json`. A seat never gets the servers `keptOut(dir)` names.
+ */
+export function mergeClaudeConfigs(dirs: string[], keptOut: (dir: string) => string[] = () => []): string[] {
   const configs = dirs
-    .map((dir) => ({ file: join(dir, ".claude.json"), data: readConfig(join(dir, ".claude.json")) }))
-    .filter((item): item is { file: string; data: Json } => item.data !== undefined);
+    .map((dir) => ({ dir, file: join(dir, ".claude.json"), data: readConfig(join(dir, ".claude.json")) }))
+    .filter((item): item is { dir: string; file: string; data: Json } => item.data !== undefined);
 
   const updated: string[] = [];
   for (const config of configs) {
     const others = configs.filter((other) => other !== config).map((other) => other.data);
-    const merged = mergeClaudeState(config.data, others);
+    const merged = mergeClaudeState(config.data, others, keptOut(config.dir));
     if (!merged) continue;
     writeJsonAtomic(config.file, merged);
     updated.push(config.file);

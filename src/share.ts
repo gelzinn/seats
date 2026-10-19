@@ -8,7 +8,8 @@ function mtime(path: string): number {
   return lstatSync(path).mtimeMs;
 }
 
-function backupPath(path: string): string {
+/** `<path>.seats-backup`, or `-2`, `-3`… when that is taken. */
+export function backupPath(path: string): string {
   let candidate = `${path}.seats-backup`;
   for (let n = 2; lexists(candidate); n++) candidate = `${path}.seats-backup-${n}`;
   return candidate;
@@ -100,14 +101,21 @@ function absorb(local: string, shared: string, report: ShareReport): void {
  * Makes every seat folder point at one shared copy of each item.
  * The newest real copy seeds the shared folder; the rest are merged into it.
  * Anything that cannot be merged is kept next to the seat as `*.seats-backup`.
- * Symlinks that point outside all seat folders are left alone.
+ * Symlinks that point outside all seat folders are left alone, and so is any
+ * item `keep(dir, item)` says that seat keeps as its own copy.
  */
-export function shareItems(seatDirs: string[], sharedRoot: string, items: string[]): ShareReport {
+export function shareItems(
+  seatDirs: string[],
+  sharedRoot: string,
+  items: string[],
+  keep: (dir: string, item: string) => boolean = () => false,
+): ShareReport {
   const report: ShareReport = { linked: [], backups: [] };
 
   for (const item of items) {
     const shared = join(sharedRoot, item);
     const locals = seatDirs
+      .filter((dir) => !keep(dir, item))
       .map((dir) => join(dir, item))
       .filter((path) => lexists(path) && !isSymlink(path))
       .sort((a, b) => mtime(b) - mtime(a));
@@ -129,6 +137,7 @@ export function shareItems(seatDirs: string[], sharedRoot: string, items: string
     if (!lexists(shared)) continue;
 
     for (const dir of seatDirs) {
+      if (keep(dir, item)) continue;
       const link = join(dir, item);
       if (isSymlink(link)) {
         const target = linkTarget(link);

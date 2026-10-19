@@ -3,6 +3,7 @@
 import { version } from "../package.json";
 import { addCommand } from "./commands/add.ts";
 import { desktopCommand } from "./commands/desktop.ts";
+import { excludeCommand, includeCommand } from "./commands/exclude.ts";
 import { healthCommand } from "./commands/health.ts";
 import { installCommand, uninstallCommand } from "./commands/install.ts";
 import { currentCommand, listCommand } from "./commands/list.ts";
@@ -51,6 +52,11 @@ Usage:
                         with the ones already open (macOS and Linux)
   seats sync            Share config and trust between seats, and MCP servers,
                         skills and instructions across tools (--dry-run to preview)
+  seats exclude <id> [<item> | mcp <name>]
+                        Keep a shared item (CLAUDE.md, skills…) or an MCP server
+                        out of one seat; with no item, list what it keeps out
+  seats include <id> <item> | mcp <name>
+                        Share it with that seat again
   seats install mcp <name> -- <command> [args...] [--env KEY=VALUE ...]
   seats install mcp <name> --url <url> [--header "Key: Value" ...] [--sse]
   seats install skill <folder | git-url> [--skill <name>]
@@ -83,6 +89,8 @@ Examples:
   seats add claude work
   seats add codex personal -- --device-auth
   seats desktop open work
+  seats exclude claude:acme CLAUDE.md
+  seats exclude claude:acme mcp gmail
   seats install mcp docs -- npx -y docs-mcp
   seats install skill ./review --dry-run
   seats uninstall mcp docs
@@ -97,11 +105,13 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   "auto-switch": autoSwitchCommand,
   current: currentCommand,
   desktop: desktopCommand,
+  exclude: excludeCommand,
   health: healthCommand,
   hook: hookCommand,
   help,
   "--help": help,
   "-h": help,
+  include: includeCommand,
   "--version": printVersion,
   "-v": printVersion,
   install: installCommand,
