@@ -14,11 +14,13 @@ import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import pc from "picocolors";
 import { isInside } from "../fs.ts";
-import { discoverSeatDirs } from "../home-dirs.ts";
+import { discoverSeatDirs, type SeatDir } from "../home-dirs.ts";
+import { listSeatDirs } from "../lib.ts";
+import { findPin, type Pin } from "../pins.ts";
 import { seatSources } from "../providers/index.ts";
 import { readConfig, seatsHome, writeConfig } from "../store.ts";
 import type { Seat, SeatSource, Usage } from "../types.ts";
-import { fail } from "./ui.ts";
+import { fail, tilde } from "./ui.ts";
 
 /** Sent after a mid-session switch, unless `seats auto-switch on --no-continue`. */
 export const CONTINUE_PROMPT = "Continue where you left off.";
@@ -44,7 +46,9 @@ const resets = (usage: Usage | undefined) =>
     .map((window) => window.resetsAt!);
 
 const say = (message: string) => console.error(`${pc.cyan("seats")} ${message}`);
-const time = (date: Date) => date.toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" });
+/** A reset as weekday and time, e.g. "Mon 14:00". */
+export const time = (date: Date) =>
+  date.toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" });
 
 /**
  * The first seat from `from` on (wrapping around) that hasn't been tried and
@@ -88,9 +92,11 @@ export function copyTranscript(transcript: string, fromDir: string, toDir: strin
   if (!existsSync(from) || !isInside(from, seatDir)) return undefined;
   const to = join(toDir, relative(seatDir, from));
   mkdirSync(dirname(to), { recursive: true });
-  cpSync(from, to);
+  // Keeping mtimes keeps the conversation where it was in the list of recent ones.
+  cpSync(from, to, { preserveTimestamps: true });
   const folder = from.replace(/\.jsonl$/, "");
-  if (folder !== from && existsSync(folder)) cpSync(folder, to.replace(/\.jsonl$/, ""), { recursive: true });
+  if (folder !== from && existsSync(folder))
+    cpSync(folder, to.replace(/\.jsonl$/, ""), { recursive: true, preserveTimestamps: true });
   return to;
 }
 
@@ -165,6 +171,8 @@ export type SuperviseOptions = {
   autoSwitch: boolean;
   autoContinue?: boolean;
   usageOf?: UsageOf;
+  /** Folder to launch in, e.g. where a resumed session ran. Defaults to the current one. */
+  cwd?: string;
 };
 
 /**
@@ -204,7 +212,7 @@ export async function supervise(options: SuperviseOptions): Promise<number> {
   process.on("SIGINT", ignore);
   try {
     let args = options.args;
-    let cwd = process.cwd();
+    let cwd = options.cwd ?? process.cwd();
     for (;;) {
       const child = spawn(binary, [...(supervised ? failover.settingsArgs(settings) : []), ...args], {
         stdio: "inherit",
@@ -245,6 +253,16 @@ function allOut(seats: Seat[], resetTimes: Date[]): number {
   return 1;
 }
 
+const cliSeat = (source: SeatSource, found: SeatDir): Seat => ({
+  id: `${source.id}:${found.slug}`,
+  source: source.id,
+  provider: source.id,
+  kind: "cli",
+  label: found.label,
+  dir: found.dir,
+  signedIn: true,
+});
+
 /**
  * The seat a CLI's live path points at (else its first seat), found from the
  * folders alone: no CLI is asked whether it's signed in, so this is instant.
@@ -254,34 +272,51 @@ export function activeSeat(home: string, source: SeatSource): Seat | undefined {
   if (!live) return undefined;
   const dirs = discoverSeatDirs(home, source.id, basename(live));
   const found = dirs.find((item) => real(item.dir) === real(live)) ?? dirs[0];
-  if (!found) return undefined;
-  return {
-    id: `${source.id}:${found.slug}`,
-    source: source.id,
-    provider: source.id,
-    kind: "cli",
-    label: found.label,
-    dir: found.dir,
-    signedIn: true,
-  };
+  return found && cliSeat(source, found);
 }
 
-/** `seats run <tool> [args…]`: the active seat of `tool`, supervised when auto-switch is on. */
+/**
+ * The seat `seats run` starts in `cwd`: the one a `.seats` file pins, else the
+ * active one. A pin to a seat that doesn't exist throws rather than falling
+ * back, so a project never runs on the wrong account.
+ */
+export function seatToRun(home: string, source: SeatSource, cwd = process.cwd()): { seat?: Seat; pin?: Pin } {
+  const pin = findPin(source.id, cwd);
+  if (!pin) return { seat: activeSeat(home, source) };
+  const found = listSeatDirs(source.id, home).find((item) => item.slug === pin.slug);
+  if (!found)
+    throw new Error(
+      `${tilde(pin.file)} pins ${source.id}:${pin.slug}, but there's no such seat. See seats list ${source.id}.`,
+    );
+  return { seat: cliSeat(source, found), pin };
+}
+
+/**
+ * `seats run <tool> [args…]`: the seat pinned in this project, else the active
+ * seat of `tool`, supervised when auto-switch is on.
+ */
 export async function runCommand([tool, ...args]: string[]): Promise<void> {
   const runnable = seatSources.filter((source) => source.kind === "cli" && source.binary && source.configDirEnv);
   const names = runnable.map((source) => source.id).join(", ");
   if (!tool) fail(`Name the tool to run: ${names}.`);
   const source = runnable.find((item) => item.id === tool) ?? fail(`seats can't run "${tool}". Try one of: ${names}.`);
   const home = homedir();
-  const active = activeSeat(home, source);
-  if (!active) fail(`No ${source.label} seat. Add one with seats add ${source.id}.`);
+  let picked: ReturnType<typeof seatToRun>;
+  try {
+    picked = seatToRun(home, source);
+  } catch (error) {
+    fail((error as Error).message);
+  }
+  const { seat, pin } = picked;
+  if (!seat) fail(`No ${source.label} seat. Add one with seats add ${source.id}.`);
+  if (pin) console.error(pc.dim(`seats ${seat.id} (from ${tilde(pin.file)})`));
   const config = readConfig(home);
   process.exitCode = await supervise({
     home,
     source,
     // Asking every seat whether it's signed in is slow; only needed to switch.
     seats: () => source.discover(home),
-    start: active,
+    start: seat,
     args,
     autoSwitch: config.autoSwitch === true,
     autoContinue: config.autoContinue,

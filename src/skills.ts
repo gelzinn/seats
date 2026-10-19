@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, realpathSync, symlinkSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
+import { isExcluded } from "./exclude.ts";
 import { isSymlink, lexists, linkTarget, moveTree, replaceSymlink } from "./fs.ts";
 import type { SkillsDir } from "./types.ts";
 
@@ -18,7 +19,7 @@ export function skillsLibrary(home: string): string {
   return join(home, ".agents", "skills");
 }
 
-function entries(dir: string): string[] {
+export function entries(dir: string): string[] {
   try {
     return readdirSync(dir).filter((name) => !name.startsWith("."));
   } catch {
@@ -38,7 +39,8 @@ export type ToolSkillsDir = { id: string; dir: string; native?: boolean };
 
 /**
  * Each installed tool's skills folder, once: folders reached through a
- * symlink (seats of one tool share theirs) and the library itself are skipped.
+ * symlink (seats of one tool share theirs) and the library itself are skipped,
+ * and so is the active seat's own copy when it keeps skills out (`seats exclude`).
  */
 export function toolSkillsDirs(home: string, targets: SkillsTarget[]): ToolSkillsDir[] {
   const library = skillsLibrary(home);
@@ -48,7 +50,7 @@ export function toolSkillsDirs(home: string, targets: SkillsTarget[]): ToolSkill
     const dir = target.dir(home);
     if (!dir) continue;
     const key = realPath(dir) ?? dir;
-    if (key === libraryKey || dirs.has(key)) continue;
+    if (key === libraryKey || dirs.has(key) || isExcluded(home, dir)) continue;
     dirs.set(key, { id: target.id, dir, native: target.native });
   }
   return [...dirs.values()];

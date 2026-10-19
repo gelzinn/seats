@@ -5,7 +5,8 @@ import { exists } from "../helpers/seats.ts";
 import { claudeAccount } from "./account.ts";
 import { claudeFailover } from "./failover.ts";
 import { mergeClaudeConfigs } from "./merge.ts";
-import { claudeUsage } from "./usage.ts";
+import { claudeSessions } from "./sessions.ts";
+import { claudeUsage, readClaudeUsage } from "./usage.ts";
 
 /** User-level Claude config that should look the same from every seat. */
 const SHARED_ITEMS = [
@@ -37,6 +38,8 @@ export const claudeSeats: SeatSource = {
   mergeSeats: mergeClaudeConfigs,
   // statusLine commands often point at a script inside the seat folder.
   pathFiles: ["settings.json"],
+  // Downloaded copies that Claude Code can fetch again from the two plugin lists.
+  machineItems: ["plugins/marketplaces", "plugins/cache"],
   // Prints a sign-in link and waits for the code to be pasted; credentials land in the seat folder.
   login: {
     args: ["auth", "login"],
@@ -46,7 +49,9 @@ export const claudeSeats: SeatSource = {
     logoutArgs: ["auth", "logout"],
   },
   usage: claudeUsage,
+  readUsage: readClaudeUsage,
   failover: claudeFailover,
+  sessions: claudeSessions,
   // Cheapest model, no MCP servers: only checks that the account answers.
   health: (prompt) => ({ args: ["-p", prompt, "--model", "haiku", "--strict-mcp-config"], model: "haiku" }),
   async discover(home) {

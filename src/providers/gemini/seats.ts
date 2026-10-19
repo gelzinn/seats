@@ -10,6 +10,8 @@ export const geminiSeats: SeatSource = {
   livePath: (home) => join(home, ".gemini"),
   // oauth_creds.json and google_accounts.json stay per account.
   sharedItems: ["settings.json", "GEMINI.md", "trustedFolders.json", "skills", "commands", "extensions"],
+  // Absolute paths to folders on this machine.
+  machineItems: ["trustedFolders.json"],
   async discover(home) {
     return homeSeats(
       home,

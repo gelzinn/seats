@@ -8,6 +8,7 @@ import { discoverSeatDirs } from "../home-dirs.ts";
 import { seatSources } from "../providers/index.ts";
 import { activeMetaFile, readActiveMeta } from "../store.ts";
 import type { Seat, SeatKind } from "../types.ts";
+import { pinLines } from "./pin.ts";
 import { fail, formatSeat, intro, KINDS } from "./ui.ts";
 
 const real = (path: string) => (existsSync(path) ? realpathSync(path) : path);
@@ -134,10 +135,13 @@ export async function listCommand([filter]: string[]): Promise<void> {
   p.outro(pc.dim("Run `seats` to switch."));
 }
 
-/** `seats current` */
+/** `seats current`: the live paths, then any seats a `.seats` file pins here. */
 export async function currentCommand(): Promise<void> {
   for (const item of currentSeats()) {
     const target = item.target ? ` -> ${item.target}` : pc.dim(" (not a symlink yet)");
     console.log(`${item.kind.padEnd(6)} ${item.provider.padEnd(14)} ${item.livePath}${target}`);
   }
+  const pins = pinLines();
+  if (pins.length > 0)
+    console.log(`\nPinned here (seats run uses these):\n${pins.map((line) => `  ${line}`).join("\n")}`);
 }

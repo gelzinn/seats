@@ -76,16 +76,26 @@ seats list claude        # one tool (or provider, or a seat id); signed-out seat
 seats current            # what each live path points at
 seats use claude:work    # activate without launching
 seats run claude         # launch the active seat, no picker (works as alias claude='seats run claude')
+seats pin claude:work    # use this seat in this project (writes ./.seats)
+seats unpin claude
 seats auto-switch on     # off by default: move to the next seat when one hits its limit
 seats use api:openrouter
 seats health             # ask every seat to reply and see which ones work
+seats usage              # every seat's 5-hour and weekly usage, without sending a prompt
+seats sessions           # conversations in this folder, from every Claude seat
+seats move 3f2a claude:work   # copy one to another seat and pick it up there
 seats add claude work    # sign a new account in, without touching the active one
+seats desktop open work  # Claude Desktop on another account, beside the ones already open
 seats rename claude:primary work   # rename a seat's folder
 seats remove claude:old  # sign it out and delete its folder
 seats sync --dry-run     # preview what sync would share, add or link
 seats sync               # share config between seats and across tools
+seats exclude claude:acme CLAUDE.md   # give one seat its own copy of a shared item
+seats exclude claude:acme mcp gmail   # keep an MCP server out of one seat
 seats install mcp docs -- npx -y docs-mcp   # add an MCP server to every tool
 seats uninstall mcp docs                    # and take it out of every tool
+seats export ~/dotfiles/seats   # your shared setup, without secrets, to carry to another machine
+seats import ~/dotfiles/seats   # and add it on the new machine
 seats migrate --dry-run  # preview moving ~/.<tool>-* into ~/.config/seats
 seats migrate
 seats --version          # the installed version
@@ -115,6 +125,47 @@ source ~/.config/seats/active.env
 
 It catches what switching wouldn't tell you: a seat that was signed out, hit its usage limit or points at a model the account can't use. The Plan column comes from what each tool already knows about the account (Claude's subscription and rate-limit tier, ChatGPT's plan for Codex). Each check is one tiny prompt on the cheapest model, whatever your config says: Haiku for Claude, and for Codex the newest small model in that account's model list, at its lowest reasoning effort. The Time column shows which model answered. It runs from a temporary folder so no project context is sent. Pass a tool or seat id to check fewer: `seats health codex`, `seats health claude:work`. The command exits with status 1 when any seat doesn't answer, so it works in scripts.
 
+`seats usage` shows how much of each Claude Code and Codex seat's limits is used, and when each window resets:
+
+```text
+┌─────────────────┬──────────────────────┬─────────┬──────────────────────┬────────────────────────┬─────────────┬──────────────────────────────────────────────────────────────────┐
+│ Seat            │ Account              │ Plan    │ 5h                   │ Week                   │ Week (opus) │ Note                                                             │
+├─────────────────┼──────────────────────┼─────────┼──────────────────────┼────────────────────────┼─────────────┼──────────────────────────────────────────────────────────────────┤
+│ claude:work     │ you@work.example     │ Max 20x │ 82% · resets in 1h12 │ 41% · resets Thu 09:00 │ 12%         │                                                                  │
+│ claude:personal │ you@personal.example │ Pro     │ 3% · resets in 4h40  │ 18% · resets Sat 14:00 │ —           │                                                                  │
+│ codex:work      │ you@work.example     │ Plus    │ —                    │ —                      │ —           │ token expired: open the seat once so its CLI refreshes the token │
+└─────────────────┴──────────────────────┴─────────┴──────────────────────┴────────────────────────┴─────────────┴──────────────────────────────────────────────────────────────────┘
+```
+
+It reads the same usage endpoints the tools' apps show, so it sends no prompt and spends no quota, and it changes nothing. A cell turns yellow at 80% and red at the limit. Codex's Free plan has a monthly window instead of a 5-hour one, and it shows as Month. A seat whose usage can't be read still gets a row that says why. seats never refreshes a token itself, so for an expired one, open that seat once and its CLI refreshes it. Pass a tool or seat id to read fewer, and `--json` to get the same data for a statusline or script. The command exits with status 0 even when a seat can't be read.
+
+Use `usage` to see which seat has room left. Use `health` when you need proof that a seat actually answers.
+
+## Pick the seat per project
+
+A `.seats` file in a project names the seat each tool uses there, so a client's work runs on the client's account and stays in that account's history:
+
+```bash
+seats pin claude:acme    # writes claude = "acme" to ./.seats
+seats pin                # the pins in effect here, and the file each comes from
+seats unpin claude       # removes it; the file goes once it's empty
+```
+
+```text
+# ~/clients/acme/.seats
+claude = "acme"
+codex = "work"
+```
+
+- **Which file wins.** seats looks in the current folder and every folder above it. Like `.editorconfig`, each tool takes the nearest `.seats` that names it, so a project can pin Claude and leave Codex to a `.seats` higher up. A tool no `.seats` names uses the active seat.
+- **`seats run <tool>`** starts the pinned seat and prints which file pinned it. Your active seat (`~/.claude` and friends) doesn't change. With auto-switch on, switching starts from the pinned seat. Add `alias claude='seats run claude'` to your shell config so plain `claude` follows pins too.
+- **The picker** (`seats`) starts on the pinned seat and marks it "pinned here". `seats current` lists the pins in effect too.
+- **A pin to a seat that doesn't exist** stops `seats run` with an error. It never falls back to another account.
+- **`.seats` holds no secrets**, only tool and seat names. A team can commit it, or you can add it to `.gitignore` for personal pins. `#` starts a comment, quotes are optional, and lines seats doesn't know are ignored.
+- **The VS Code extension can't be pinned per project.** Its `claudeCode.environmentVariables` setting is machine-scoped, so VS Code ignores it in `.vscode/settings.json`.
+
+Tools that launch a CLI themselves can honour pins with `pinnedSeat` from the [library](#use-seats-from-other-tools).
+
 ## Switch accounts at the limit
 
 Off by default. Turn it on with `seats auto-switch on`. Tools you launch through seats (`seats`, or `seats run <tool>`) then keep going when an account runs out:
@@ -135,6 +186,59 @@ seats auto-switch on      # or: on --no-continue
 seats auto-switch status
 seats auto-switch off
 ```
+
+## Claude Desktop on several accounts
+
+Claude Desktop keeps one signed-in account. Switching means signing out, and the other account's chats leave the window. `seats desktop` gives each account its own data folder instead, so you can open several at once, each in its own window:
+
+```bash
+seats desktop open work      # open Claude Desktop on "work", beside any window already open
+seats desktop list           # each account, its folder and when it was last opened
+seats desktop remove work    # asks first, then deletes only that account's folder (--yes to skip)
+```
+
+Each account lives in `~/.config/seats/claude-desktop/<name>/`. The first `open` creates the folder and the app shows its own sign-in. These accounts are separate from your CLI seats, because the desktop app signs in on its own. The app's own profile, the one you get from the Dock or the app menu, is never read or changed.
+
+It works by starting the app with Chromium's `--user-data-dir` flag. On macOS seats runs `open -n -a Claude --args --user-data-dir=…` on `/Applications/Claude.app` or `~/Applications/Claude.app`. On Linux it runs `claude-desktop` from your `PATH`, which the [official beta package](https://code.claude.com/docs/en/desktop-linux) and the [claude-desktop-debian](https://github.com/aaddrick/claude-desktop-debian) builds both install.
+
+Things to know:
+
+- **Sign in with every other Claude window closed.** Sign-in comes back through a `claude://` link, and the system can hand it to any open window, which then saves the account in the wrong folder. Once an account is signed in, its window can run next to the others.
+- **Open accounts through seats.** Claude from the Dock, Spotlight or the app menu opens the app's own profile, and so does a Dock icon pinned from a running window. If the app restarts itself after an update, the new window opens on that profile too. Run `seats desktop open <name>` again.
+- **Each account has its own copy of everything.** MCP servers and settings in `claude_desktop_config.json` don't carry over to a new account. If you use Cowork, each account downloads its own sandbox images, which can take several GB.
+- **Claude Code sessions inside the app** still read `~/.claude`, which is your active CLI seat.
+- `--user-data-dir` is a standard Electron flag, but Claude Desktop doesn't document it. If a future release ignores it, this stops working.
+- The Codex desktop app isn't supported yet.
+
+## Continue a conversation on another seat
+
+Each seat keeps its own history, so `claude --resume` on one account doesn't show what you were doing on another. `seats sessions` lists conversations from every Claude seat, newest first:
+
+```text
+┌─────────────────┬────────┬────────────┬───────────────────────────────┬──────────┐
+│ Seat            │ When   │ Project    │ Title                         │ Id       │
+├─────────────────┼────────┼────────────┼───────────────────────────────┼──────────┤
+│ claude:personal │ 5m ago │ ~/code/app │ Fix the login redirect        │ 3f2a9c1e │
+│ claude:work     │ 2h ago │ ~/code/app │ Add retries to the API client │ 8b41d0f7 │
+└─────────────────┴────────┴────────────┴───────────────────────────────┴──────────┘
+```
+
+- It shows the conversations of the folder you're in, the same ones `claude --resume` would list there. Add `--all` for every project. Pass a seat id to see one seat: `seats sessions claude:work`.
+- The title is the name you gave the conversation, or Claude's own title, or else your first message. Only the start and end of each transcript are read, so long conversations stay fast to list.
+- The 20 newest are shown, with a note when there are more.
+
+`seats move <id> <seat>` copies a conversation to another seat. The first characters of the id are enough; if they fit more than one conversation, seats lists them so you can type more.
+
+```bash
+seats move 3f2a claude:work
+seats move 3f2a claude:work --force   # replace a copy the seat already has
+```
+
+- It copies, nothing is moved away: the conversation stays on the seat it came from, and both can go on from there.
+- The transcript and its folder land at the same place inside the other seat, so `claude --resume` finds it there.
+- A seat that already has that conversation keeps its copy unless you add `--force`. Moving a conversation to the seat it's on is an error.
+- Afterwards seats prints the command that continues it, and in a terminal it asks "Open it now on claude:work?". Yes opens it on that seat with `claude --resume`, from the folder the conversation ran in. Your active seat doesn't change, and auto-switch stays out of this launch, so it opens on the seat you named.
+- Codex isn't supported yet: it isn't confirmed that copying its session file is enough for `codex resume` on another account.
 
 ## One folder for every seat
 
@@ -222,6 +326,22 @@ When a tool has two or more seats, activating one of them, or running `seats syn
 
 </details>
 
+### Keep something out of one seat
+
+Every seat of a tool gets the same CLAUDE.md, skills and MCP servers. A client's seat may need its own instructions, or no access to your personal mail server:
+
+```bash
+seats exclude claude:acme CLAUDE.md   # this seat gets its own CLAUDE.md
+seats exclude claude:acme mcp gmail   # and no gmail MCP server
+seats exclude claude:acme             # list what it keeps out
+seats include claude:acme CLAUDE.md   # share it again
+seats include claude:acme mcp gmail
+```
+
+- **A shared item** (any name from the table above, like `CLAUDE.md`, `skills` or `settings.json`) stops being a link. The seat gets a copy of the shared one, so nothing changes until you edit it; seats prints its path. From then on `seats sync`, switching seats and the sync across tools leave that copy alone, even while the seat is active. The choice is saved in `~/.config/seats/config.json`.
+- **An MCP server** is removed from that seat's `.claude.json`, and the seat id is added to the server's `skip` in `mcp.json` (`"skip": ["claude:acme"]`). Merging seats, `seats sync` and `seats install mcp` then never write it into that seat. This works for Claude seats, which keep their own MCP servers.
+- **`seats include`** undoes it. The seat's own copy moves aside as `<item>.seats-backup`, not into the shared one, since it may hold things the other seats shouldn't see. A server comes back on the next `seats sync` or switch.
+
 ## One setup across tools
 
 `seats sync` also keeps MCP servers, skills and global instructions the same in every tool you have installed. Run `seats sync --dry-run` first to see every change it would make. It doesn't run when you switch seats.
@@ -294,6 +414,32 @@ seats uninstall skill review
 - **`seats uninstall skill`** removes the links that point at the library copy, then the copy itself. A tool's own folders and links that point elsewhere are kept.
 - Add **`--dry-run`** to any of these commands to see the plan without changing anything.
 
+## Move your setup to another machine
+
+`seats export` writes what seats shares to a folder: `mcp.json`, `AGENTS.md`, each tool's shared config and the skills in `~/.agents/skills`. `seats import` adds it on the other machine.
+
+```bash
+seats export ~/dotfiles/seats --dry-run   # see what would be written
+seats export ~/dotfiles/seats
+seats import ~/dotfiles/seats             # on the new machine
+```
+
+The folder holds no accounts and no secrets, so it can live in a dotfiles repo.
+
+- **Never exported:** seat folders, logins, sessions and history, `active.env`, `*.seats-backup` files, and things that only hold on this machine. These are Claude's plugin cache and marketplace clones (Claude Code fetches them again from the two plugin lists, which are exported), Gemini's `trustedFolders.json` and Codex's trusted projects.
+- **Secrets become references.** Literal values under `env` and `headers` become `${NAME}`: the env key, or the server and header name for headers (`DOCS_AUTHORIZATION`). Values that are already references, and file paths, stay as they are. In Codex's `config.toml`, `bearer_token` becomes `bearer_token_env_var` and a literal header moves to `env_http_headers`, which Codex reads from the environment. `env` values get `${NAME}` placeholders to fill in. Claude's `settings.json` doesn't expand references in its `env`, so literal values there are left out.
+- **A leak check runs last.** Seats searches the written folder for every secret it took out, and if one is still there (in a server's `args`, say), it deletes the export and stops. Values shorter than 8 characters aren't searched for, since they appear everywhere by chance.
+- **Paths to your home folder** in JSON and TOML files are written as `~` and expanded to the new home on import.
+- **The folder** must be empty or hold an earlier export, which is replaced. Other files in it, like a `.git`, are kept.
+- **`seats-export.json`** records the seats version, the date, every file, what was left out, and the env vars to define on the new machine. It holds names, never values.
+
+Import never replaces your files:
+
+- Files you don't have are added. JSON files are merged, and your copy wins every conflict. An MCP server you already have, by name ignoring case, is kept as it is.
+- Another file that differs is kept, and the export's copy is saved next to it as `<name>.seats-import`. A skill you have with different content is kept and reported.
+- Then it runs `seats sync`, so the MCP servers, skills and instructions reach every installed tool. A tool's shared config reaches its seats once it has two or more.
+- Last, it lists the env vars the imported config uses that aren't set in your shell.
+
 ## Use seats from other tools
 
 Tools that launch a CLI on a given seat can ask seats for its folder instead of hardcoding a path, so `seats migrate` doesn't break them:
@@ -305,7 +451,7 @@ seatDir("claude", "work"); // "/home/you/.config/seats/claude/work"
 seatEnv("claude", "work"); // { CLAUDE_CONFIG_DIR: "/home/you/.config/seats/claude/work" }
 ```
 
-`listSeatDirs(provider)` lists every seat folder, signed in or not. The library only reads folders and never runs a CLI.
+`listSeatDirs(provider)` lists every seat folder, signed in or not. `pinnedSeat(provider, cwd)` returns the `{ slug, file }` a project's `.seats` pins, or undefined. It doesn't check that the seat exists, so pass the slug to `seatDir` and report a missing seat rather than falling back. The library only reads folders and never runs a CLI.
 
 **Paseo.** [`integrations/paseo`](integrations/paseo) is a Paseo plugin that sets `CLAUDE_CONFIG_DIR` from seats whenever a `claude-<seat>` provider opens a session. Keep the provider's `env` in Paseo's `config.json` too, because provider diagnostics and model listing don't go through the plugin. Paseo only loads modules from inside the plugin folder, so the plugin installs seats as a copy (`install-links`). After changing the library, run `bun run build` here and `npm install` in `integrations/paseo`, then reload the plugin.
 
@@ -357,7 +503,7 @@ Seats never signs in for you and never sends credentials anywhere. Keys stay in 
 | `src/providers/index.ts` | The list of providers; everything else reads from it |
 | `src/providers/helpers/` | Code shared by several providers (seat folders, API keys) |
 | `src/cli.ts` | Help text and routing to the commands |
-| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `run` (`run`, `auto-switch`, the limit hook), `add`, `health`, `sync`, `install` (`install`, `uninstall`), `migrate` |
+| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `run` (`run`, `auto-switch`, the limit hook), `pin` (`pin`, `unpin`), `sessions` (`sessions`, `move`), `manage` (`rename`, `remove`), `add`, `health`, `usage`, `sync`, `install` (`install`, `uninstall`), `migrate` |
 | `src/home-dirs.ts`, `src/store.ts` | Finding and naming seat folders; the `~/.config/seats` layout and `active.env` |
 | `src/share.ts`, `src/skills.ts`, `src/instructions.ts` | Sharing files between seats, and skills and instructions across tools |
 | `src/mcp/` | The tool-neutral MCP library and the JSON helpers adapters build on |
@@ -387,7 +533,7 @@ src/providers/acme/
 export const acme: Provider = {
   id: "acme",
   label: "Acme CLI",
-  seats: [acmeSeats], // `configDirEnv` plus `login` / `health` enable `seats add` / `seats health`
+  seats: [acmeSeats], // `configDirEnv` plus `login` / `health` enable `seats add` / `seats health`; `usage` enables `seats usage`
   mcp: acmeMcp,
   skills: [{ dir: (home) => ifDir(join(home, ".acme"), "skills") }],
   instructions: (home) => ifDir(join(home, ".acme"), "AGENTS.md"),

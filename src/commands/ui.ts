@@ -36,6 +36,9 @@ export function formatSeat(seat: Seat): string {
 const visibleLength = (text: string) => stripVTControlCharacters(text).length;
 const pad = (text: string, width: number) => text + " ".repeat(Math.max(0, width - visibleLength(text)));
 
+/** Cuts `text` to `max` characters, ending with … when it was longer. */
+export const truncate = (text: string, max = 60) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
+
 /** A boxed table with a bold header row. Cells may contain colors. */
 export function table(headers: string[], rows: string[][]): string {
   const widths = headers.map((header, column) =>

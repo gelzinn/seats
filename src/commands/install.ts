@@ -14,6 +14,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
+import { seatIdOf } from "../exclude.ts";
 import { isInside, isSymlink, lexists, readLink, replaceSymlink, writeJsonAtomic } from "../fs.ts";
 import { compact } from "../mcp/convert.ts";
 import { forTool, libraryFile, readLibrary, usesEnvRefs } from "../mcp/library.ts";
@@ -147,7 +148,7 @@ function installInTool(
  * Writes `server` into the shared library, then into every installed tool in
  * its own format. A tool that already has the name (ignoring case) keeps its
  * entry unless `force`. Installing clears the `skip: ["*"]` uninstall leaves;
- * tools listed in the entry's `skip` stay excluded.
+ * tools and seats listed in the entry's `skip` stay excluded.
  */
 export function installMcp(
   home: string,
@@ -167,16 +168,24 @@ export function installMcp(
     writeJsonAtomic(libraryFile(home), { mcpServers: library });
   }
 
-  const tools = adapters.flatMap((adapter) => {
+  const tools = adapters.flatMap((adapter): Outcome[] => {
     const files = toolFiles(adapter, home);
-    return files.length > 0 ? [installInTool(adapter, files, name, server, { force, dryRun, skip })] : [];
+    if (files.length === 0) return [];
+    const seats = files.map((file) => seatIdOf(home, file));
+    const kept = files.filter((_, index) => !skip.includes(seats[index] ?? ""));
+    if (kept.length === 0) {
+      const reason = `kept out of ${seats.join(", ")} by skip in mcp.json`;
+      return [{ where: adapter.id, path: tilde(files[0]!), status: "skipped", reason }];
+    }
+    return [installInTool(adapter, kept, name, server, { force, dryRun, skip })];
   });
   return [saved, ...tools];
 }
 
 /**
  * Removes the server from every installed tool, then marks it `skip: ["*"]`
- * in the library so `seats sync` doesn't bring it back from anywhere.
+ * in the library so `seats sync` doesn't bring it back from anywhere. Seat
+ * ids in `skip` stay, so installing it again still keeps it out of those seats.
  */
 export function uninstallMcp(
   home: string,
@@ -220,7 +229,8 @@ export function uninstallMcp(
   }
   if (!dryRun) {
     // Keeps the definition (or one a tool had) so the entry still says what it was.
-    library[key ?? name] = { ...(existing ?? seen ?? { type: "stdio" }), skip: ["*"] };
+    const seats = existing?.skip?.filter((id) => id.includes(":")) ?? [];
+    library[key ?? name] = { ...(existing ?? seen ?? { type: "stdio" }), skip: ["*", ...seats] };
     writeJsonAtomic(libraryFile(home), { mcpServers: library });
   }
   return [

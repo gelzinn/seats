@@ -4,20 +4,10 @@ import { fromCommon, type Json, record } from "../../mcp/convert.ts";
 import { configFile } from "../../mcp/json.ts";
 import type { McpConfig, McpServer, McpServers } from "../../mcp/types.ts";
 import { codexHome } from "./paths.ts";
-import { removeTables } from "./toml.ts";
+import { removeTables, tomlKey, tomlValue } from "./toml.ts";
 
 /** Comment written above the tables seats appends. */
-const MARKER = "# added by seats";
-
-/** TOML bare key when allowed, quoted otherwise. */
-const tomlKey = (key: string) => (/^[A-Za-z0-9_-]+$/.test(key) ? key : JSON.stringify(key));
-/** JSON strings are valid TOML basic strings. */
-const tomlValue = (value: string | string[]) =>
-  Array.isArray(value) ? `[${value.map((item) => JSON.stringify(item)).join(", ")}]` : JSON.stringify(value);
-const tomlTable = (map: Record<string, string>) =>
-  `{ ${Object.entries(map)
-    .map(([key, value]) => `${tomlKey(key)} = ${JSON.stringify(value)}`)
-    .join(", ")} }`;
+export const MARKER = "# added by seats";
 
 function servers(file: string): Json {
   if (!existsSync(file)) return {};
@@ -32,12 +22,12 @@ function toTable(name: string, server: McpServer): string {
           command: tomlValue(server.command!),
           args: server.args && tomlValue(server.args),
           cwd: server.cwd && tomlValue(server.cwd),
-          env: server.env && tomlTable(server.env),
+          env: server.env && tomlValue(server.env),
         }
-      : { url: tomlValue(server.url!), http_headers: server.headers && tomlTable(server.headers) };
+      : { url: tomlValue(server.url!), http_headers: server.headers && tomlValue(server.headers) };
   // Options override seats' own fields rather than repeat a key, which TOML rejects.
   for (const [key, value] of Object.entries(server.options ?? {})) {
-    fields[key] = typeof value === "string" || Array.isArray(value) ? tomlValue(value) : String(value);
+    fields[key] = tomlValue(value);
   }
   const lines = Object.entries(fields).flatMap(([key, value]) =>
     value === undefined ? [] : [`${tomlKey(key)} = ${value}`],
