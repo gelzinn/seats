@@ -52,11 +52,12 @@ Usage:
   seats desktop open|list|remove <name>
                         Open Claude Desktop on another account, side by side
                         with the ones already open (macOS and Linux)
-  seats rename <id> <name>
+  seats rename [id] [name]
                         Rename a seat's folder (claude | codex), repointing the
-                        live paths when it's the active seat
-  seats remove <id>     Sign the account out and delete its folder (--yes to
-                        skip the question, --keep-login to skip the sign-out)
+                        live paths when it's the active seat; asks for what's missing
+  seats remove [id]     Sign the account out and delete its folder; with no id,
+                        pick one (--yes to skip the question, --keep-login to
+                        skip the sign-out)
   seats sync            Share config and trust between seats, and MCP servers,
                         skills and instructions across tools (--dry-run to preview)
   seats exclude <id> [<item> | mcp <name>]

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { Runner } from "../../src/commands/add.ts";
-import { findSeatFolder, removeSeat, renameSeat } from "../../src/commands/manage.ts";
+import { findSeatFolder, removeSeat, renameSeat, seatFolders } from "../../src/commands/manage.ts";
 import { processesUsing, type RunningProcess } from "../../src/processes.ts";
 import { tempHome } from "../helpers/temp-home.ts";
 
@@ -31,6 +31,15 @@ const session = (dir: string): RunningProcess => ({
   pid: 4242,
   argv: ["/usr/bin/claude", "--resume"],
   env: { CLAUDE_CONFIG_DIR: dir },
+});
+
+describe("seatFolders", () => {
+  test("lists every seat folder seats can manage, but not a real live folder", () => {
+    twoSeats();
+    env.write(".codex/auth.json", {});
+    env.write(".config/seats/codex/work/auth.json", {});
+    expect(seatFolders(env.home).map((seat) => seat.id)).toEqual(["claude:primary", "claude:secondary", "codex:work"]);
+  });
 });
 
 describe("renameSeat", () => {

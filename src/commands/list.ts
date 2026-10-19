@@ -125,7 +125,7 @@ export async function listCommand([filter]: string[]): Promise<void> {
   const seats = await discoverWithSpinner(kind, kind ? undefined : filter, { allowNone: true });
   const signedOut = signedOutSeats(homedir(), seats, filter);
   if (seats.length === 0 && signedOut.length === 0) fail(filter ? `No seat matches ${filter}.` : "No seats found.");
-  for (const seat of seats) p.log.message(formatSeat(seat));
+  for (const seat of seats) p.log.message(`${formatSeat(seat)}  ${pc.dim(seat.id)}`);
   for (const seat of signedOut) {
     const slug = seat.id.slice(seat.source.length + 1);
     p.log.message(

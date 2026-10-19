@@ -10,6 +10,7 @@ import { seatSources } from "../providers/index.ts";
 import { storeDir } from "../store.ts";
 import type { SeatSource } from "../types.ts";
 import { invalidSlug, type Runner, runInTerminal } from "./add.ts";
+import { discoverWithSpinner } from "./list.ts";
 import { repoint } from "./migrate.ts";
 import { cancelIfNeeded, fail, tilde } from "./ui.ts";
 
@@ -38,6 +39,17 @@ export function findSeatFolder(home: string, id: string): SeatFolder {
   // A real ~/.claude is the `default` seat; the CLI reads it directly, so it stays put.
   if (resolve(dir) === resolve(live)) throw new Error(`${id} is ${tilde(live)} itself, which seats doesn't move.`);
   return { id, source, slug, dir };
+}
+
+/** Every seat folder seats can rename or remove, signed in or not; the real live folder isn't one. */
+export function seatFolders(home: string): SeatFolder[] {
+  return managedSources().flatMap((source) => {
+    const live = resolve(source.livePath!(home));
+    return discoverSeatDirs(home, source.id, basename(live))
+      .filter((item) => resolve(item.dir) !== live)
+      .sort((a, b) => a.slug.localeCompare(b.slug, undefined, { numeric: true }))
+      .map((item) => ({ id: `${source.id}:${item.slug}`, source, slug: item.slug, dir: item.dir }));
+  });
 }
 
 /** True when the CLI's live path points at this seat. */
@@ -149,9 +161,41 @@ const orFail = <T>(action: () => T): T => {
   }
 };
 
-/** `seats rename <tool:slug> <new-slug>` */
+/** Asks which seat to act on, listing each with its account; the active one can't be picked when `skipActive`. */
+async function pickSeatFolder(message: string, { skipActive = false } = {}): Promise<string> {
+  const home = homedir();
+  const folders = seatFolders(home);
+  if (folders.length === 0) fail("No seat to pick. Add one with seats add.");
+  const signedIn = await discoverWithSpinner("cli", undefined, { allowNone: true });
+  const emailOf = (dir: string) => signedIn.find((seat) => seat.dir && resolve(seat.dir) === resolve(dir))?.email;
+  const choice = await p.select({
+    message,
+    options: folders.map((seat) => {
+      const active = isActiveSeat(home, seat);
+      const label = `${seat.id}  ${pc.dim(emailOf(seat.dir) ?? "signed out")}`;
+      return { value: seat.id, label, hint: active ? "active" : undefined, disabled: skipActive && active };
+    }),
+  });
+  cancelIfNeeded<string>(choice);
+  return choice;
+}
+
+const interactive = () => process.stdin.isTTY && process.stdout.isTTY;
+
+/** `seats rename [tool:slug] [new-slug]`: asks for whatever is missing. */
 export async function renameCommand([id, to]: string[]): Promise<void> {
-  if (!id || !to) fail("Pass a seat id and its new name, e.g. seats rename claude:primary work");
+  if ((!id || !to) && !interactive()) fail("Pass a seat id and its new name, e.g. seats rename claude:primary work");
+  id ??= await pickSeatFolder("Which seat do you want to rename?");
+  if (!to) {
+    const seat = orFail(() => findSeatFolder(homedir(), id));
+    const name = await p.text({
+      message: `New name for ${id}`,
+      placeholder: seat.slug,
+      validate: (value) => (value ? invalidSlug(homedir(), seat.source, value) : "Type a name."),
+    });
+    cancelIfNeeded<string>(name);
+    to = name;
+  }
   const result = orFail(() => renameSeat(homedir(), id, to));
   p.log.success(`${id} is now ${pc.cyan(result.id)}`);
   p.log.message(pc.dim(tilde(result.dir)));
@@ -161,10 +205,11 @@ export async function renameCommand([id, to]: string[]): Promise<void> {
   );
 }
 
-/** `seats remove <tool:slug> [--yes] [--keep-login]` */
+/** `seats remove [tool:slug] [--yes] [--keep-login]`: with no id, asks which seat. */
 export async function removeCommand(args: string[]): Promise<void> {
-  const id = args.find((arg) => !arg.startsWith("-"));
-  if (!id) fail("Pass a seat id, e.g. seats remove claude:work");
+  let id = args.find((arg) => !arg.startsWith("-"));
+  if (!id && !interactive()) fail("Pass a seat id, e.g. seats remove claude:work. See seats list for the ids.");
+  id ??= await pickSeatFolder("Which seat do you want to remove?", { skipActive: true });
   const yes = args.includes("--yes") || args.includes("-y");
   const keepLogin = args.includes("--keep-login");
   const home = homedir();
