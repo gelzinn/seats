@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { assertSwitchable, isSymlink, replaceSymlink } from "../fs.ts";
+import { findPins, type Pin } from "../pins.ts";
 import { seatSourceById } from "../providers/index.ts";
 import { readConfig, writeActiveEnv } from "../store.ts";
 import type { Seat, SeatKind } from "../types.ts";
@@ -58,11 +59,22 @@ async function pickKind(seats: Seat[]): Promise<SeatKind | "all"> {
   return choice as SeatKind | "all";
 }
 
+/** True when a `.seats` file pins `seat` for its tool in `cwd`. */
+export function isPinned(seat: Seat, pins: Map<string, Pin>): boolean {
+  const pin = seat.kind === "cli" ? pins.get(seat.source) : undefined;
+  return pin !== undefined && seat.id === `${seat.source}:${pin.slug}`;
+}
+
 async function pickSeat(seats: Seat[]): Promise<Seat> {
   const current = currentSeats().find((item) => item.target);
-  const initial = seats.find(
-    (seat) =>
-      seat.id === current?.target || (current?.targetPath && seat.dir && resolve(seat.dir) === current.targetPath),
+  const pins = findPins();
+  // A seat pinned in this project comes first, then the active one.
+  const initial = (
+    seats.find((seat) => isPinned(seat, pins)) ??
+    seats.find(
+      (seat) =>
+        seat.id === current?.target || (current?.targetPath && seat.dir && resolve(seat.dir) === current.targetPath),
+    )
   )?.id;
 
   const choice = await p.select({
@@ -71,7 +83,7 @@ async function pickSeat(seats: Seat[]): Promise<Seat> {
     options: seats.map((seat) => ({
       value: seat.id,
       label: `${seat.provider} · ${seat.label}`,
-      hint: seat.email ?? seat.kind,
+      hint: [seat.email ?? seat.kind, isPinned(seat, pins) ? "pinned here" : ""].filter(Boolean).join(" · "),
     })),
   });
   cancelIfNeeded(choice);

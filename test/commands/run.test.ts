@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, readFileSync, symlinkSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import {
   activeSeat,
   CONTINUE_PROMPT,
   copyTranscript,
   nextAvailable,
+  seatToRun,
   supervise,
   type UsageOf,
 } from "../../src/commands/run.ts";
@@ -79,6 +80,33 @@ describe("activeSeat", () => {
   });
 });
 
+describe("seatToRun", () => {
+  const claude = seatSourceById("claude");
+
+  test("starts the seat a .seats file pins, else the active one, without moving the live path", () => {
+    env.write(".config/seats/claude/work/.claude.json", "{}");
+    env.write(".config/seats/claude/acme/.claude.json", "{}");
+    symlinkSync(".config/seats/claude/work", join(env.home, ".claude"));
+    const file = env.write("clients/acme/.seats", 'claude = "acme"\n');
+
+    const pinned = seatToRun(env.home, claude, join(env.home, "clients/acme/src"));
+    expect(pinned.seat).toMatchObject({ id: "claude:acme", dir: seat("acme").dir });
+    expect(pinned.pin?.file).toBe(file);
+    expect(seatToRun(env.home, claude, join(env.home, "elsewhere"))).toEqual({
+      seat: expect.objectContaining({ id: "claude:work" }),
+    });
+    expect(activeSeat(env.home, claude)?.id).toBe("claude:work");
+  });
+
+  test("fails on a pin to a seat that doesn't exist, instead of using another account", () => {
+    env.write(".config/seats/claude/work/.claude.json", "{}");
+    env.write("clients/acme/.seats", 'claude = "acme"\n');
+    expect(() => seatToRun(env.home, claude, join(env.home, "clients/acme"))).toThrow(
+      "pins claude:acme, but there's no such seat. See seats list claude.",
+    );
+  });
+});
+
 describe("copyTranscript", () => {
   test("puts the session and its folder at the same place under the next seat", () => {
     const transcript = env.write(".config/seats/claude/work/projects/-repo/s1.jsonl", '{"type":"user"}\n');
@@ -125,6 +153,7 @@ function fakeClaude(): string {
     "bin/claude",
     `#!/bin/bash
 echo "$(basename "$CLAUDE_CONFIG_DIR")|$*|\${SEATS_LIMIT_MARKER:+marker}" >> "$FAKE_LOG"
+pwd > "$FAKE_DIR/launched-in"
 case "$FAKE_MODE:$(basename "$CLAUDE_CONFIG_DIR")" in
   limit:work|passing:work)
     touch "$FAKE_DIR/$FAKE_MODE-reported"
@@ -176,6 +205,25 @@ describe("supervise", () => {
     expect(second![0]).toBe("personal");
     expect(second![1]).toEndWith(`--resume s1 ${CONTINUE_PROMPT}`);
     expect(readFileSync(join(seat("personal").dir!, "projects/-repo/s1.jsonl"), "utf8")).toBe('{"type":"user"}\n');
+  });
+
+  test("launches in the folder it's given, so --resume finds a session from there", async () => {
+    const log = fakeClaude();
+    mkdirSync(join(env.home, "repo"));
+    const folder = realpathSync(join(env.home, "repo"));
+    const work = seat("work");
+    const code = await supervise({
+      home: env.home,
+      source: claude,
+      seats: [work],
+      start: work,
+      args: ["--resume", "s1"],
+      autoSwitch: false,
+      cwd: folder,
+    });
+    expect(code).toBe(0);
+    expect(launches(log)).toEqual(["work|--resume s1|"]);
+    expect(readFileSync(join(env.home, "launched-in"), "utf8").trim()).toBe(folder);
   });
 
   test("leaves the session alone on a passing 429", async () => {

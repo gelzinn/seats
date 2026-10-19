@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { listSeatDirs, seatDir, seatEnv } from "../src/lib.ts";
+import { listSeatDirs, pinnedSeat, seatDir, seatEnv } from "../src/lib.ts";
 import { tempHome } from "./helpers/temp-home.ts";
 
 let env: ReturnType<typeof tempHome>;
@@ -30,5 +30,12 @@ describe("lib", () => {
     expect(seatEnv("codex", "work", home)).toEqual({ CODEX_HOME: join(home, ".config/seats/codex/work") });
     expect(seatDir("gemini", "work", home)).toBe(join(home, ".config/seats/gemini/work"));
     expect(seatEnv("gemini", "work", home)).toBeUndefined();
+  });
+
+  test("reads the seat a project pins, without checking it exists", () => {
+    env = tempHome();
+    const file = env.write("project/.seats", 'claude = "work"\n');
+    expect(pinnedSeat("claude", join(env.home, "project/src"))).toEqual({ slug: "work", file });
+    expect(pinnedSeat("codex", join(env.home, "project"))).toBeUndefined();
   });
 });

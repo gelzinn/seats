@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { basename } from "node:path";
 import { discoverSeatDirs, type SeatDir } from "./home-dirs.ts";
+import { findPin } from "./pins.ts";
 import { seatSources } from "./providers/index.ts";
 
 export { seatsHome } from "./store.ts";
@@ -37,4 +38,15 @@ export function seatEnv(provider: string, slug: string, home = homedir()): Recor
   if (!dir) return undefined;
   const env = seatDirEnv(provider, dir);
   return Object.keys(env).length > 0 ? env : undefined;
+}
+
+/**
+ * The seat a project's `.seats` file pins for `provider`, found by walking up
+ * from `cwd`, so integrations launch the same account `seats run` would.
+ * Undefined when no `.seats` names it. Doesn't check that the seat exists:
+ * pass `slug` to `seatDir` and report a missing one instead of falling back.
+ */
+export function pinnedSeat(provider: string, cwd = process.cwd()): { slug: string; file: string } | undefined {
+  const pin = findPin(provider, cwd);
+  return pin && { slug: pin.slug, file: pin.file };
 }
