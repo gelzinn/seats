@@ -6,7 +6,7 @@ import { claudeAccount } from "./account.ts";
 import { claudeFailover } from "./failover.ts";
 import { mergeClaudeConfigs } from "./merge.ts";
 import { claudeSessions } from "./sessions.ts";
-import { claudeUsage } from "./usage.ts";
+import { claudeUsage, readClaudeUsage } from "./usage.ts";
 
 /** User-level Claude config that should look the same from every seat. */
 const SHARED_ITEMS = [
@@ -46,6 +46,7 @@ export const claudeSeats: SeatSource = {
     codePrompt: "Paste code here if prompted >",
   },
   usage: claudeUsage,
+  readUsage: readClaudeUsage,
   failover: claudeFailover,
   sessions: claudeSessions,
   // Cheapest model, no MCP servers: only checks that the account answers.

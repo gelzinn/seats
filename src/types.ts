@@ -62,6 +62,8 @@ export type SeatSource = {
   health?: (prompt: string, dir: string) => { args: string[]; model?: string };
   /** Current usage of the account in `dir`, read without spending any. Undefined when it can't be read. */
   usage?: (dir: string) => Promise<Usage | undefined>;
+  /** Like `usage`, but says why it couldn't be read. Used by `seats usage`. */
+  readUsage?: (dir: string) => Promise<UsageReading>;
   /**
    * How a supervised session moves to another seat when this one hits its
    * limit mid-session (`seats auto-switch`). Needs a CLI hook that reports it.
@@ -97,8 +99,15 @@ export type Session = {
   updatedAt: Date;
 };
 
-export type UsageWindow = { name: string; usedPercent: number; resetsAt?: Date };
+/** `label` is how the window is shown, e.g. "5h", "Week", "Week (opus)". Defaults to `name`. */
+export type UsageWindow = { name: string; label?: string; usedPercent: number; resetsAt?: Date };
 export type Usage = { windows: UsageWindow[] };
+/**
+ * Why usage couldn't be read: the seat has no token, its token expired (seats
+ * never refreshes it; the tool does on its next start), or the request failed.
+ */
+export type UsageError = "no-token" | "expired" | "failed";
+export type UsageReading = { usage: Usage; error?: never } | { usage?: never; error: UsageError };
 
 /** A folder where the tool keeps user skills. */
 export type SkillsDir = {
