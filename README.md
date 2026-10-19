@@ -276,6 +276,7 @@ seats creates `~/.config/seats/<tool>/<name>` and runs the tool's own sign-in th
 ```bash
 seats rename claude:primary work   # ~/.config/seats/claude/primary → …/work
 seats remove claude:old            # asks first; --yes skips the question
+seats remove                       # no id: pick the seat from a list
 ```
 
 `rename` moves the folder, repoints `~/.claude` and `~/.claude.json` when it's the active seat, and rewrites paths in `settings.json`. `remove` runs the tool's own logout (`claude auth logout`, `codex logout`) and then deletes the folder; `--keep-login` skips the logout. Shared config is untouched, since the seat only holds links to it. Both refuse while a `claude` or `codex` session is running on that seat, because the session keeps writing to the folder. `remove` also refuses the active seat: switch away with `seats use` first. Anything outside seats that sets `CLAUDE_CONFIG_DIR` or `CODEX_HOME` to the old folder needs updating by hand.
