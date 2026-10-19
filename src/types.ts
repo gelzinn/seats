@@ -34,8 +34,11 @@ export type SeatSource = {
   configDirEnv?: string;
   /** Paths inside a seat folder that every seat of this source shares. */
   sharedItems?: string[];
-  /** Merges per-seat state that can't be a shared file. Returns the files it rewrote. */
-  mergeSeats?: (dirs: string[]) => string[];
+  /**
+   * Merges per-seat state that can't be a shared file. Returns the files it
+   * rewrote. `keptOut(dir)` names the MCP servers that seat must not get.
+   */
+  mergeSeats?: (dirs: string[], keptOut?: (dir: string) => string[]) => string[];
   /** Seat files that may hold absolute paths to the seat folder, rewritten by `seats migrate`. */
   pathFiles?: string[];
   /** Shared items that only hold on this machine (downloads, folder trust), left out of `seats export`. */
@@ -69,6 +72,8 @@ export type SeatSource = {
   health?: (prompt: string, dir: string) => { args: string[]; model?: string };
   /** Current usage of the account in `dir`, read without spending any. Undefined when it can't be read. */
   usage?: (dir: string) => Promise<Usage | undefined>;
+  /** Like `usage`, but says why it couldn't be read. Used by `seats usage`. */
+  readUsage?: (dir: string) => Promise<UsageReading>;
   /**
    * How a supervised session moves to another seat when this one hits its
    * limit mid-session (`seats auto-switch`). Needs a CLI hook that reports it.
@@ -81,6 +86,27 @@ export type SeatSource = {
     /** Args that reopen a session, optionally sending `prompt` first. */
     resumeArgs: (sessionId: string, prompt?: string) => string[];
   };
+  /**
+   * The conversations a seat keeps, for `seats sessions` and `seats move`.
+   * A session is one file that resumes from the same path in any seat.
+   */
+  sessions?: {
+    /** Conversations kept in the seat folder `dir`, in no particular order. */
+    list: (dir: string) => Session[];
+    /** Args that reopen a session. */
+    resumeArgs: (sessionId: string) => string[];
+  };
+};
+
+/** One conversation, read from the start and end of its transcript. */
+export type Session = {
+  id: string;
+  /** The transcript, inside the seat folder. */
+  file: string;
+  /** Folder the conversation ran in, as the transcript recorded it. */
+  cwd?: string;
+  title: string;
+  updatedAt: Date;
 };
 
 /**
@@ -93,8 +119,15 @@ export type SecretRef = (value: string, ...names: string[]) => string | undefine
 /** A file rewritten for `seats export`, with what was left out of it. */
 export type PortableText = { text: string; dropped: string[] };
 
-export type UsageWindow = { name: string; usedPercent: number; resetsAt?: Date };
+/** `label` is how the window is shown, e.g. "5h", "Week", "Week (opus)". Defaults to `name`. */
+export type UsageWindow = { name: string; label?: string; usedPercent: number; resetsAt?: Date };
 export type Usage = { windows: UsageWindow[] };
+/**
+ * Why usage couldn't be read: the seat has no token, its token expired (seats
+ * never refreshes it; the tool does on its next start), or the request failed.
+ */
+export type UsageError = "no-token" | "expired" | "failed";
+export type UsageReading = { usage: Usage; error?: never } | { usage?: never; error: UsageError };
 
 /** A folder where the tool keeps user skills. */
 export type SkillsDir = {

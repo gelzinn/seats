@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { isExcluded } from "./exclude.ts";
 import { isSymlink, moveTree, replaceSymlink } from "./fs.ts";
 import { seatsHome } from "./store.ts";
 
@@ -33,7 +34,8 @@ function real(path: string): string {
 /**
  * Points every tool's global instructions at one `AGENTS.md`. The first
  * non-empty file seeds it. Files with the same text (or empty ones) become links;
- * files with different text are reported and left alone.
+ * files with different text are reported and left alone. A file the active
+ * seat keeps as its own (`seats exclude`) is never read, seeded from or linked.
  */
 export function syncInstructions(
   home: string,
@@ -46,7 +48,7 @@ export function syncInstructions(
   // Follow links so a seat's CLAUDE.md -> shared/claude/CLAUDE.md is handled at its real file.
   const files = targets.flatMap((target) => {
     const file = target.file(home);
-    return file ? [{ id: target.id, file, path: real(file) }] : [];
+    return file && !isExcluded(home, file) ? [{ id: target.id, file, path: real(file) }] : [];
   });
 
   let text = existsSync(canonical) ? normalized(canonical) : undefined;

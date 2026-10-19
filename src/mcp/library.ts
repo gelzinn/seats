@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { seatIdOf } from "../exclude.ts";
 import { writeJsonAtomic } from "../fs.ts";
 import { mcpAdapters } from "../providers/index.ts";
 import { seatsHome } from "../store.ts";
@@ -46,7 +47,8 @@ export const usesEnvRefs = (server: McpServer) => Object.values({ ...server.env,
  * Collects user-level MCP servers from every installed tool into the shared
  * library, then adds the ones each tool is missing. Names compare
  * case-insensitively, and a name a tool already has is never touched, even
- * when seats can't parse that entry. `skip: ["*"]` keeps a server everywhere out.
+ * when seats can't parse that entry. `skip: ["*"]` keeps a server everywhere out;
+ * a seat id in `skip` keeps it out of a file that belongs to that seat.
  */
 export function syncMcp(
   home: string,
@@ -81,12 +83,15 @@ export function syncMcp(
   if (report.imported.length > 0 && !dryRun) writeJsonAtomic(libraryFile(home), { mcpServers: library });
 
   for (const { adapter, file, names } of installed) {
+    // ~/.claude.json is the active seat's own file.
+    const seat = seatIdOf(home, file);
     const missing = Object.fromEntries(
       Object.entries(library).filter(
         ([name, server]) =>
           !names.has(lower(name)) &&
           !server.skip?.includes("*") &&
           !server.skip?.includes(adapter.id) &&
+          !(seat && server.skip?.includes(seat)) &&
           !adapter.unsupported?.includes(server.type),
       ),
     );
