@@ -6,6 +6,7 @@ import { healthCommand } from "./commands/health.ts";
 import { installCommand, uninstallCommand } from "./commands/install.ts";
 import { currentCommand, listCommand } from "./commands/list.ts";
 import { migrateCommand } from "./commands/migrate.ts";
+import { pinCommand, unpinCommand } from "./commands/pin.ts";
 import { autoSwitchCommand, hookCommand, runCommand } from "./commands/run.ts";
 import { pickCommand, useCommand } from "./commands/switch.ts";
 import { syncCommand } from "./commands/sync.ts";
@@ -17,10 +18,14 @@ Usage:
   seats                 Interactive picker
   seats list [filter]   Show seats: all, or one kind (cli | api | cloud), tool
                         (claude, openrouter…) or seat id. Signed-out ones show dimmed
-  seats current         Show active homedirs and env
+  seats current         Show active homedirs and env, and seats pinned here
   seats use <id>        Activate a seat without launching
   seats run <tool> [args...]
-                        Launch the active seat of a tool, without the picker
+                        Launch the seat pinned here, else the active seat of a
+                        tool, without the picker
+  seats pin [tool:seat] Pin a seat for this project in ./.seats; with no seat,
+                        show the pins in effect here and their files
+  seats unpin <tool>    Take a tool's pin out of ./.seats
   seats auto-switch [on|off]
                         Off by default. When on, a seat at its usage limit is
                         skipped, and a Claude Code session that hits it moves
@@ -59,6 +64,8 @@ Examples:
   seats usage
   seats usage codex --json
   seats run claude --continue
+  seats pin claude:work
+  seats unpin claude
   seats auto-switch on
   seats add claude work
   seats add codex personal -- --device-auth
@@ -85,9 +92,11 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   install: installCommand,
   list: listCommand,
   migrate: migrateCommand,
+  pin: pinCommand,
   run: runCommand,
   sync: syncCommand,
   uninstall: uninstallCommand,
+  unpin: unpinCommand,
   usage: usageCommand,
   use: useCommand,
 };

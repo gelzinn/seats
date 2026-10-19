@@ -76,6 +76,8 @@ seats list claude        # one tool (or provider, or a seat id); signed-out seat
 seats current            # what each live path points at
 seats use claude:work    # activate without launching
 seats run claude         # launch the active seat, no picker (works as alias claude='seats run claude')
+seats pin claude:work    # use this seat in this project (writes ./.seats)
+seats unpin claude
 seats auto-switch on     # off by default: move to the next seat when one hits its limit
 seats use api:openrouter
 seats health             # ask every seat to reply and see which ones work
@@ -129,6 +131,31 @@ It catches what switching wouldn't tell you: a seat that was signed out, hit its
 It reads the same usage endpoints the tools' apps show, so it sends no prompt and spends no quota, and it changes nothing. A cell turns yellow at 80% and red at the limit. Codex's Free plan has a monthly window instead of a 5-hour one, and it shows as Month. A seat whose usage can't be read still gets a row that says why. seats never refreshes a token itself, so for an expired one, open that seat once and its CLI refreshes it. Pass a tool or seat id to read fewer, and `--json` to get the same data for a statusline or script. The command exits with status 0 even when a seat can't be read.
 
 Use `usage` to see which seat has room left. Use `health` when you need proof that a seat actually answers.
+
+## Pick the seat per project
+
+A `.seats` file in a project names the seat each tool uses there, so a client's work runs on the client's account and stays in that account's history:
+
+```bash
+seats pin claude:acme    # writes claude = "acme" to ./.seats
+seats pin                # the pins in effect here, and the file each comes from
+seats unpin claude       # removes it; the file goes once it's empty
+```
+
+```text
+# ~/clients/acme/.seats
+claude = "acme"
+codex = "work"
+```
+
+- **Which file wins.** seats looks in the current folder and every folder above it. Like `.editorconfig`, each tool takes the nearest `.seats` that names it, so a project can pin Claude and leave Codex to a `.seats` higher up. A tool no `.seats` names uses the active seat.
+- **`seats run <tool>`** starts the pinned seat and prints which file pinned it. Your active seat (`~/.claude` and friends) doesn't change. With auto-switch on, switching starts from the pinned seat. Add `alias claude='seats run claude'` to your shell config so plain `claude` follows pins too.
+- **The picker** (`seats`) starts on the pinned seat and marks it "pinned here". `seats current` lists the pins in effect too.
+- **A pin to a seat that doesn't exist** stops `seats run` with an error. It never falls back to another account.
+- **`.seats` holds no secrets**, only tool and seat names. A team can commit it, or you can add it to `.gitignore` for personal pins. `#` starts a comment, quotes are optional, and lines seats doesn't know are ignored.
+- **The VS Code extension can't be pinned per project.** Its `claudeCode.environmentVariables` setting is machine-scoped, so VS Code ignores it in `.vscode/settings.json`.
+
+Tools that launch a CLI themselves can honour pins with `pinnedSeat` from the [library](#use-seats-from-other-tools).
 
 ## Switch accounts at the limit
 
@@ -311,7 +338,7 @@ seatDir("claude", "work"); // "/home/you/.config/seats/claude/work"
 seatEnv("claude", "work"); // { CLAUDE_CONFIG_DIR: "/home/you/.config/seats/claude/work" }
 ```
 
-`listSeatDirs(provider)` lists every seat folder, signed in or not. The library only reads folders and never runs a CLI.
+`listSeatDirs(provider)` lists every seat folder, signed in or not. `pinnedSeat(provider, cwd)` returns the `{ slug, file }` a project's `.seats` pins, or undefined. It doesn't check that the seat exists, so pass the slug to `seatDir` and report a missing seat rather than falling back. The library only reads folders and never runs a CLI.
 
 **Paseo.** [`integrations/paseo`](integrations/paseo) is a Paseo plugin that sets `CLAUDE_CONFIG_DIR` from seats whenever a `claude-<seat>` provider opens a session. Keep the provider's `env` in Paseo's `config.json` too, because provider diagnostics and model listing don't go through the plugin. Paseo only loads modules from inside the plugin folder, so the plugin installs seats as a copy (`install-links`). After changing the library, run `bun run build` here and `npm install` in `integrations/paseo`, then reload the plugin.
 
@@ -363,7 +390,7 @@ Seats never signs in for you and never sends credentials anywhere. Keys stay in 
 | `src/providers/index.ts` | The list of providers; everything else reads from it |
 | `src/providers/helpers/` | Code shared by several providers (seat folders, API keys) |
 | `src/cli.ts` | Help text and routing to the commands |
-| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `run` (`run`, `auto-switch`, the limit hook), `add`, `health`, `usage`, `sync`, `install` (`install`, `uninstall`), `migrate` |
+| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `run` (`run`, `auto-switch`, the limit hook), `pin` (`pin`, `unpin`), `add`, `health`, `usage`, `sync`, `install` (`install`, `uninstall`), `migrate` |
 | `src/home-dirs.ts`, `src/store.ts` | Finding and naming seat folders; the `~/.config/seats` layout and `active.env` |
 | `src/share.ts`, `src/skills.ts`, `src/instructions.ts` | Sharing files between seats, and skills and instructions across tools |
 | `src/mcp/` | The tool-neutral MCP library and the JSON helpers adapters build on |
