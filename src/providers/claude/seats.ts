@@ -38,6 +38,8 @@ export const claudeSeats: SeatSource = {
   mergeSeats: mergeClaudeConfigs,
   // statusLine commands often point at a script inside the seat folder.
   pathFiles: ["settings.json"],
+  // Downloaded copies that Claude Code can fetch again from the two plugin lists.
+  machineItems: ["plugins/marketplaces", "plugins/cache"],
   // Prints a sign-in link and waits for the code to be pasted; credentials land in the seat folder.
   login: {
     args: ["auth", "login"],

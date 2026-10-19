@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SeatSource } from "../../types.ts";
 import { exists, homeSeats } from "../helpers/seats.ts";
+import { portableConfig } from "./export.ts";
 import { codexHealth } from "./health.ts";
 import { codexUsage, readCodexUsage } from "./usage.ts";
 
@@ -42,6 +43,7 @@ export const codexSeats: SeatSource = {
   readUsage: readCodexUsage,
   // config.toml carries MCP servers and trusted projects; auth.json and sessions stay per account.
   sharedItems: ["config.toml", "AGENTS.md", "agents", "skills", "rules", "prompts", "hooks.json"],
+  exportFiles: { "config.toml": portableConfig },
   async discover(home) {
     return homeSeats(home, "codex", ".codex", (dir) => exists(dir, "auth.json")).map((seat) => ({
       ...seat,

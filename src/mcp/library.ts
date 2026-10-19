@@ -39,8 +39,9 @@ export function forTool(servers: McpServers, toolId: string): McpServers {
 }
 
 /** `${VAR}`, `$VAR`, `{env:VAR}`: every tool spells env references differently. */
-export const usesEnvRefs = (server: McpServer) =>
-  Object.values({ ...server.env, ...server.headers }).some((value) => /\$\{?[A-Za-z_]|\{env:/.test(value));
+export const isEnvRef = (value: string) => /\$\{?[A-Za-z_]|\{env:/.test(value);
+
+export const usesEnvRefs = (server: McpServer) => Object.values({ ...server.env, ...server.headers }).some(isEnvRef);
 
 /**
  * Collects user-level MCP servers from every installed tool into the shared

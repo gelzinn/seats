@@ -98,7 +98,7 @@ function byTool(items: string[]): string[] {
   return [...groups].map(([tool, names]) => `${tool.padEnd(16)} ${names.join(", ")}`);
 }
 
-function printSync(report: FullSyncReport, dryRun: boolean): void {
+export function printSync(report: FullSyncReport, dryRun: boolean): void {
   const section = (title: string, lines: string[]) => {
     if (lines.length === 0) return;
     console.log(`\n${pc.bold(title)}`);

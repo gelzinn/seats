@@ -41,6 +41,13 @@ export type SeatSource = {
   mergeSeats?: (dirs: string[], keptOut?: (dir: string) => string[]) => string[];
   /** Seat files that may hold absolute paths to the seat folder, rewritten by `seats migrate`. */
   pathFiles?: string[];
+  /** Shared items that only hold on this machine (downloads, folder trust), left out of `seats export`. */
+  machineItems?: string[];
+  /**
+   * How `seats export` carries a shared file that isn't plain JSON, by item
+   * name. Shared JSON files need nothing here: their `env` and `headers` are handled for every tool.
+   */
+  exportFiles?: Record<string, (text: string, secret: SecretRef) => PortableText>;
   /**
    * How `seats add` signs a new account in: `binary` runs with `args` and
    * `configDirEnv` pointing at the new seat folder. Only for CLIs that keep
@@ -101,6 +108,16 @@ export type Session = {
   title: string;
   updatedAt: Date;
 };
+
+/**
+ * Records a literal secret found while exporting and returns the env var name
+ * that replaces it: the first of `names` not already taken by another value.
+ * Undefined when `value` is already a reference such as `${TOKEN}`, or a file path.
+ */
+export type SecretRef = (value: string, ...names: string[]) => string | undefined;
+
+/** A file rewritten for `seats export`, with what was left out of it. */
+export type PortableText = { text: string; dropped: string[] };
 
 /** `label` is how the window is shown, e.g. "5h", "Week", "Week (opus)". Defaults to `name`. */
 export type UsageWindow = { name: string; label?: string; usedPercent: number; resetsAt?: Date };

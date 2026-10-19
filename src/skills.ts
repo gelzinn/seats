@@ -19,7 +19,7 @@ export function skillsLibrary(home: string): string {
   return join(home, ".agents", "skills");
 }
 
-function entries(dir: string): string[] {
+export function entries(dir: string): string[] {
   try {
     return readdirSync(dir).filter((name) => !name.startsWith("."));
   } catch {

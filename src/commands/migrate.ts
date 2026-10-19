@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import pc from "picocolors";
-import { isInside, isSymlink, lexists, linkTarget, moveTree, replaceSymlink } from "../fs.ts";
+import { isInside, isSymlink, lexists, linkTarget, moveTree, replacePathPrefix, replaceSymlink } from "../fs.ts";
 import { discoverSeatDirs, legacySeatDirs } from "../home-dirs.ts";
 import { seatSources } from "../providers/index.ts";
 import { sharedDir, storeDir } from "../store.ts";
@@ -72,7 +72,7 @@ function repoint(home: string, from: string, to: string): void {
   for (const file of filesWithPaths(home)) {
     if (!existsSync(file)) continue;
     const text = readFileSync(file, "utf8");
-    const next = text.replaceAll(`${from}/`, `${to}/`);
+    const next = replacePathPrefix(text, from, to);
     if (next !== text) writeFileSync(file, next);
   }
 }

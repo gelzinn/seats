@@ -92,6 +92,8 @@ seats exclude claude:acme CLAUDE.md   # give one seat its own copy of a shared i
 seats exclude claude:acme mcp gmail   # keep an MCP server out of one seat
 seats install mcp docs -- npx -y docs-mcp   # add an MCP server to every tool
 seats uninstall mcp docs                    # and take it out of every tool
+seats export ~/dotfiles/seats   # your shared setup, without secrets, to carry to another machine
+seats import ~/dotfiles/seats   # and add it on the new machine
 seats migrate --dry-run  # preview moving ~/.<tool>-* into ~/.config/seats
 seats migrate
 seats --version          # the installed version
@@ -400,6 +402,32 @@ seats uninstall skill review
 - **`seats uninstall mcp`** removes the server from every tool and every Claude seat. It then marks the server `"skip": ["*"]` in `mcp.json`, so `seats sync` doesn't import it again. Installing the server again clears the mark.
 - **`seats uninstall skill`** removes the links that point at the library copy, then the copy itself. A tool's own folders and links that point elsewhere are kept.
 - Add **`--dry-run`** to any of these commands to see the plan without changing anything.
+
+## Move your setup to another machine
+
+`seats export` writes what seats shares to a folder: `mcp.json`, `AGENTS.md`, each tool's shared config and the skills in `~/.agents/skills`. `seats import` adds it on the other machine.
+
+```bash
+seats export ~/dotfiles/seats --dry-run   # see what would be written
+seats export ~/dotfiles/seats
+seats import ~/dotfiles/seats             # on the new machine
+```
+
+The folder holds no accounts and no secrets, so it can live in a dotfiles repo.
+
+- **Never exported:** seat folders, logins, sessions and history, `active.env`, `*.seats-backup` files, and things that only hold on this machine. These are Claude's plugin cache and marketplace clones (Claude Code fetches them again from the two plugin lists, which are exported), Gemini's `trustedFolders.json` and Codex's trusted projects.
+- **Secrets become references.** Literal values under `env` and `headers` become `${NAME}`: the env key, or the server and header name for headers (`DOCS_AUTHORIZATION`). Values that are already references, and file paths, stay as they are. In Codex's `config.toml`, `bearer_token` becomes `bearer_token_env_var` and a literal header moves to `env_http_headers`, which Codex reads from the environment. `env` values get `${NAME}` placeholders to fill in. Claude's `settings.json` doesn't expand references in its `env`, so literal values there are left out.
+- **A leak check runs last.** Seats searches the written folder for every secret it took out, and if one is still there (in a server's `args`, say), it deletes the export and stops. Values shorter than 8 characters aren't searched for, since they appear everywhere by chance.
+- **Paths to your home folder** in JSON and TOML files are written as `~` and expanded to the new home on import.
+- **The folder** must be empty or hold an earlier export, which is replaced. Other files in it, like a `.git`, are kept.
+- **`seats-export.json`** records the seats version, the date, every file, what was left out, and the env vars to define on the new machine. It holds names, never values.
+
+Import never replaces your files:
+
+- Files you don't have are added. JSON files are merged, and your copy wins every conflict. An MCP server you already have, by name ignoring case, is kept as it is.
+- Another file that differs is kept, and the export's copy is saved next to it as `<name>.seats-import`. A skill you have with different content is kept and reported.
+- Then it runs `seats sync`, so the MCP servers, skills and instructions reach every installed tool. A tool's shared config reaches its seats once it has two or more.
+- Last, it lists the env vars the imported config uses that aren't set in your shell.
 
 ## Use seats from other tools
 
