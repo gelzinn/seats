@@ -25,9 +25,10 @@ Usage:
                         (claude, openrouter…) or seat id. Signed-out ones show dimmed
   seats current         Show active homedirs and env, and seats pinned here
   seats use <id>        Activate a seat without launching
-  seats run <tool> [args...]
-                        Launch the seat pinned here, else the active seat of a
-                        tool, without the picker
+  seats run <tool[:seat]> [args...]
+                        Launch the seat named, else the one pinned here, else
+                        the active seat of a tool, without the picker or
+                        changing the active seat
   seats pin [tool:seat] Pin a seat for this project in ./.seats; with no seat,
                         show the pins in effect here and their files
   seats unpin <tool>    Take a tool's pin out of ./.seats
@@ -94,6 +95,7 @@ Examples:
   seats usage
   seats usage codex --json
   seats run claude --continue
+  seats run claude:work
   seats pin claude:work
   seats unpin claude
   seats auto-switch on

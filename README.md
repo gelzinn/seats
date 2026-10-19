@@ -76,6 +76,7 @@ seats list claude        # one tool (or provider, or a seat id); signed-out seat
 seats current            # what each live path points at
 seats use claude:work    # activate without launching
 seats run claude         # launch the active seat, no picker (works as alias claude='seats run claude')
+seats run claude:work    # launch one seat without activating it
 seats pin claude:work    # use this seat in this project (writes ./.seats)
 seats unpin claude
 seats auto-switch on     # off by default: move to the next seat when one hits its limit
@@ -161,6 +162,7 @@ codex = "work"
 - **`seats run <tool>`** starts the pinned seat and prints which file pinned it. Your active seat (`~/.claude` and friends) doesn't change. With auto-switch on, switching starts from the pinned seat. Add `alias claude='seats run claude'` to your shell config so plain `claude` follows pins too.
 - **The picker** (`seats`) starts on the pinned seat and marks it "pinned here". `seats current` lists the pins in effect too.
 - **A pin to a seat that doesn't exist** stops `seats run` with an error. It never falls back to another account.
+- **`seats run <tool>:<seat>`** launches that seat for this one session, over any pin, and leaves the active seat alone. A seat that doesn't exist stops it with an error.
 - **`.seats` holds no secrets**, only tool and seat names. A team can commit it, or you can add it to `.gitignore` for personal pins. `#` starts a comment, quotes are optional, and lines seats doesn't know are ignored.
 - **The VS Code extension can't be pinned per project.** Its `claudeCode.environmentVariables` setting is machine-scoped, so VS Code ignores it in `.vscode/settings.json`.
 

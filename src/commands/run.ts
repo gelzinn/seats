@@ -276,11 +276,21 @@ export function activeSeat(home: string, source: SeatSource): Seat | undefined {
 }
 
 /**
- * The seat `seats run` starts in `cwd`: the one a `.seats` file pins, else the
- * active one. A pin to a seat that doesn't exist throws rather than falling
- * back, so a project never runs on the wrong account.
+ * The seat `seats run` starts in `cwd`: the one named by `slug`, else the one a
+ * `.seats` file pins, else the active one. A named or pinned seat that doesn't
+ * exist throws rather than falling back, so nothing runs on the wrong account.
  */
-export function seatToRun(home: string, source: SeatSource, cwd = process.cwd()): { seat?: Seat; pin?: Pin } {
+export function seatToRun(
+  home: string,
+  source: SeatSource,
+  cwd = process.cwd(),
+  slug?: string,
+): { seat?: Seat; pin?: Pin } {
+  if (slug !== undefined) {
+    const named = listSeatDirs(source.id, home).find((item) => item.slug === slug);
+    if (!named) throw new Error(`There's no ${source.id}:${slug} seat. See seats list ${source.id}.`);
+    return { seat: cliSeat(source, named) };
+  }
   const pin = findPin(source.id, cwd);
   if (!pin) return { seat: activeSeat(home, source) };
   const found = listSeatDirs(source.id, home).find((item) => item.slug === pin.slug);
@@ -292,18 +302,20 @@ export function seatToRun(home: string, source: SeatSource, cwd = process.cwd())
 }
 
 /**
- * `seats run <tool> [args…]`: the seat pinned in this project, else the active
- * seat of `tool`, supervised when auto-switch is on.
+ * `seats run <tool[:seat]> [args…]`: the seat named, else the seat pinned in
+ * this project, else the active seat of `tool`, supervised when auto-switch is on.
  */
-export async function runCommand([tool, ...args]: string[]): Promise<void> {
+export async function runCommand([id, ...args]: string[]): Promise<void> {
   const runnable = seatSources.filter((source) => source.kind === "cli" && source.binary && source.configDirEnv);
   const names = runnable.map((source) => source.id).join(", ");
-  if (!tool) fail(`Name the tool to run: ${names}.`);
+  if (!id) fail(`Name the tool to run: ${names}.`);
+  const [tool = "", slug] = id.split(/:(.*)/);
+  if (slug === "") fail(`Name the seat after the colon, e.g. seats run ${tool}:work.`);
   const source = runnable.find((item) => item.id === tool) ?? fail(`seats can't run "${tool}". Try one of: ${names}.`);
   const home = homedir();
   let picked: ReturnType<typeof seatToRun>;
   try {
-    picked = seatToRun(home, source);
+    picked = seatToRun(home, source, process.cwd(), slug);
   } catch (error) {
     fail((error as Error).message);
   }
