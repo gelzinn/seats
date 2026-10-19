@@ -9,6 +9,7 @@ import { migrateCommand } from "./commands/migrate.ts";
 import { autoSwitchCommand, hookCommand, runCommand } from "./commands/run.ts";
 import { pickCommand, useCommand } from "./commands/switch.ts";
 import { syncCommand } from "./commands/sync.ts";
+import { usageCommand } from "./commands/usage.ts";
 
 const HELP = `seats — switch the active AI CLI, API, or cloud seat
 
@@ -26,6 +27,9 @@ Usage:
                         to the next seat with --resume
   seats health [tool|id]
                         Ask each signed-in seat to reply and show which work
+  seats usage [tool|id] [--json]
+                        Show each seat's 5-hour and weekly usage, without
+                        sending a prompt (--json for scripts)
   seats add [tool] [name]
                         Sign a new account in (claude | codex) without touching
                         the active one. Args after -- go to the tool's login.
@@ -52,6 +56,8 @@ Examples:
   seats use claude:primary
   seats use api:openrouter
   seats health
+  seats usage
+  seats usage codex --json
   seats run claude --continue
   seats auto-switch on
   seats add claude work
@@ -82,6 +88,7 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   run: runCommand,
   sync: syncCommand,
   uninstall: uninstallCommand,
+  usage: usageCommand,
   use: useCommand,
 };
 

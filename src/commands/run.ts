@@ -44,7 +44,9 @@ const resets = (usage: Usage | undefined) =>
     .map((window) => window.resetsAt!);
 
 const say = (message: string) => console.error(`${pc.cyan("seats")} ${message}`);
-const time = (date: Date) => date.toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" });
+/** A reset as weekday and time, e.g. "Mon 14:00". */
+export const time = (date: Date) =>
+  date.toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" });
 
 /**
  * The first seat from `from` on (wrapping around) that hasn't been tried and
