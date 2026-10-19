@@ -105,6 +105,25 @@ describe("seatToRun", () => {
       "pins claude:acme, but there's no such seat. See seats list claude.",
     );
   });
+  test("starts a named seat over the pin and the active one", () => {
+    env.write(".config/seats/claude/work/.claude.json", "{}");
+    env.write(".config/seats/claude/acme/.claude.json", "{}");
+    env.write(".config/seats/claude/1/.claude.json", "{}");
+    symlinkSync(".config/seats/claude/work", join(env.home, ".claude"));
+    env.write("clients/acme/.seats", 'claude = "acme"\n');
+
+    expect(seatToRun(env.home, claude, join(env.home, "clients/acme"), "1")).toEqual({
+      seat: expect.objectContaining({ id: "claude:1", dir: seat("1").dir }),
+    });
+    expect(activeSeat(env.home, claude)?.id).toBe("claude:work");
+  });
+
+  test("fails on a named seat that doesn't exist", () => {
+    env.write(".config/seats/claude/work/.claude.json", "{}");
+    expect(() => seatToRun(env.home, claude, env.home, "nope")).toThrow(
+      "There's no claude:nope seat. See seats list claude.",
+    );
+  });
 });
 
 describe("copyTranscript", () => {
