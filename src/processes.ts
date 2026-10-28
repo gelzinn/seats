@@ -13,14 +13,15 @@ function parseEnv(entries: string[]): Record<string, string> {
   return env;
 }
 
-/** Linux: every process of this user, from `/proc`. Undefined where there's no `/proc`. */
-function fromProc(): RunningProcess[] | undefined {
+/** Linux: every process of this user (or those in `only`), from `/proc`. Undefined where there's no `/proc`. */
+function fromProc(only?: number[]): RunningProcess[] | undefined {
   let pids: string[];
   try {
     pids = readdirSync("/proc").filter((name) => /^\d+$/.test(name));
   } catch {
     return undefined;
   }
+  if (only) pids = pids.filter((pid) => only.includes(Number(pid)));
   const found: RunningProcess[] = [];
   for (const pid of pids) {
     try {
@@ -35,10 +36,11 @@ function fromProc(): RunningProcess[] | undefined {
 }
 
 /** macOS: `ps -E` appends the env to the command line. Best effort: paths with spaces split. */
-function fromPs(): RunningProcess[] {
+function fromPs(only?: number[]): RunningProcess[] {
   let output: string;
+  const which = only ? ["-p", only.join(",")] : ["-ax"];
   try {
-    output = execFileSync("ps", ["-Eww", "-axo", "pid=,command="], { encoding: "utf8" });
+    output = execFileSync("ps", ["-Eww", ...which, "-o", "pid=,command="], { encoding: "utf8" });
   } catch {
     return [];
   }
@@ -52,8 +54,10 @@ function fromPs(): RunningProcess[] {
   });
 }
 
-export function runningProcesses(): RunningProcess[] {
-  return fromProc() ?? fromPs();
+/** Every process of this user, or only those of `pids`. */
+export function runningProcesses(pids?: number[]): RunningProcess[] {
+  if (pids?.length === 0) return [];
+  return fromProc(pids) ?? fromPs(pids);
 }
 
 function real(path: string): string {
@@ -65,7 +69,7 @@ function real(path: string): string {
 }
 
 /** `/usr/lib/node_modules/codex/bin/codex.js` → `codex`. */
-const programName = (arg: string) => basename(arg).replace(/\.(c|m)?js$|\.exe$/, "");
+export const programName = (arg: string) => basename(arg).replace(/\.(c|m)?js$|\.exe$/, "");
 
 /**
  * Processes of `binary` launched with `envName` set to `dir`: the sessions
