@@ -3,6 +3,7 @@ import { join } from "node:path";
 import pc from "picocolors";
 import { readExclusions, seatFolders } from "../exclude.ts";
 import { isSymlink, lexists } from "../fs.ts";
+import { tidySharedHooks } from "../hook-paths.ts";
 import { type InstructionsReport, syncInstructions } from "../instructions.ts";
 import { type McpSyncReport, syncMcp } from "../mcp/library.ts";
 import { instructionsTargets, providers, seatSources, skillsTargets } from "../providers/index.ts";
@@ -12,19 +13,24 @@ import { sharedDir } from "../store.ts";
 import { addSessionHook, mergeOptions } from "../trust.ts";
 import { tilde } from "./ui.ts";
 
-/** `hooked`: settings files that got the session hook. */
-export type SyncReport = { linked: string[]; backups: string[]; merged: string[]; hooked: string[] };
+/**
+ * `hooked`: settings files that got the session hook. `tidied`: shared
+ * settings whose hook paths into one seat now point at the shared item.
+ */
+export type SyncReport = { linked: string[]; backups: string[]; merged: string[]; hooked: string[]; tidied: string[] };
 
 /**
  * Shares config between seats of the same source. Providers with a single
  * seat are left alone: there is nothing to share and no reason to move files.
  * Items, MCP servers and trust a seat keeps out (`seats exclude`) stay as they
  * are. The shared settings get the CLI's session hook, which carries trust to
- * the other seats as soon as it's given. A dry run lists the seat items that
- * would move into the shared folder and the hook it would add.
+ * the other seats as soon as it's given, and hook paths that lead into one
+ * seat's shared item are pointed at one path, without duplicates. A dry run
+ * lists the seat items that would move into the shared folder and the
+ * settings it would change.
  */
 export function syncSeats(home: string, only?: string[], { dryRun = false } = {}): SyncReport {
-  const report: SyncReport = { linked: [], backups: [], merged: [], hooked: [] };
+  const report: SyncReport = { linked: [], backups: [], merged: [], hooked: [], tidied: [] };
   const exclusions = readExclusions(home);
 
   for (const source of seatSources) {
@@ -45,6 +51,8 @@ export function syncSeats(home: string, only?: string[], { dryRun = false } = {}
           .filter((path) => lexists(path) && !isSymlink(path));
         report.linked.push(...pending);
       }
+      const tidied = tidySharedHooks(home, source, dirs, keep, { dryRun });
+      if (tidied) report.tidied.push(tidied);
       const hooked = addSessionHook(home, source, dirs, keep, { dryRun });
       if (hooked) report.hooked.push(hooked);
       continue;
@@ -53,6 +61,8 @@ export function syncSeats(home: string, only?: string[], { dryRun = false } = {}
     const shared = shareItems(dirs, sharedDir(home, source.id), source.sharedItems, keep);
     report.linked.push(...shared.linked);
     report.backups.push(...shared.backups);
+    const tidied = tidySharedHooks(home, source, dirs, keep);
+    if (tidied) report.tidied.push(tidied);
     const hooked = addSessionHook(home, source, dirs, keep);
     if (hooked) report.hooked.push(hooked);
     if (!source.mergeSeats) continue;
@@ -107,6 +117,7 @@ export function printSync(report: FullSyncReport, dryRun: boolean): void {
   section("Seats", [
     ...seats.linked.map((path) => `${dryRun ? "share" : "linked"} ${tilde(path)}`),
     ...seats.merged.map((path) => `merged ${tilde(path)}`),
+    ...seats.tidied.map((path) => `${dryRun ? "tidy" : "tidied"} the hook paths in ${tilde(path)}`),
     ...seats.hooked.map((path) => `${dryRun ? "add" : "added"} the session hook to ${tilde(path)}`),
     ...seats.backups.map((path) => pc.dim(`kept ${tilde(path)}`)),
   ]);
@@ -134,6 +145,7 @@ export function printSync(report: FullSyncReport, dryRun: boolean): void {
     seats.linked,
     seats.merged,
     seats.hooked,
+    seats.tidied,
     mcp.imported,
     mcp.added,
     skills.imported,

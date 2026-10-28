@@ -60,7 +60,10 @@ Usage:
                         pick one (--yes to skip the question, --keep-login to
                         skip the sign-out)
   seats sync            Share config and trust between seats, and MCP servers,
-                        skills and instructions across tools (--dry-run to preview)
+                        skills and instructions across tools; point hooks that
+                        run through one seat at the shared copy (--dry-run to preview)
+  seats doctor          Check the session hook, seats on PATH, the herdr plugin
+                        and integrations, and Paseo's plugin path, with a fix for each
   seats exclude <id> [<item> | mcp <name> | trust]
                         Keep a shared item (CLAUDE.md, skills…), an MCP server
                         or folder trust out of one seat; with no item, list

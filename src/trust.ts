@@ -108,6 +108,24 @@ export function pushFromSession(home: string, env: NodeJS.ProcessEnv = process.e
 }
 
 /**
+ * The settings file the seats of `source` share: the one their links lead
+ * to, else where a new shared one goes. Undefined when every seat keeps its own.
+ */
+export function sharedSettingsFile(
+  home: string,
+  source: SeatSource,
+  dirs: string[],
+  keep: (dir: string, item: string) => boolean,
+): string | undefined {
+  const item = source.sessionHook?.item;
+  if (!item) return undefined;
+  const sharing = dirs.filter((dir) => !keep(dir, item));
+  if (sharing.length === 0) return undefined;
+  const linked = sharing.map((dir) => join(dir, item)).find((path) => isSymlink(path) && existsSync(path));
+  return linked ?? join(sharedDir(home, source.id), item);
+}
+
+/**
  * Puts the session hook in the settings file the seats of `source` share:
  * the file their links lead to, else a new shared one linked into each.
  * Returns the file, or undefined when the hook is there already, every seat
@@ -121,12 +139,8 @@ export function addSessionHook(
   { dryRun = false } = {},
 ): string | undefined {
   const hook = source.sessionHook;
-  if (!hook) return undefined;
-  const sharing = dirs.filter((dir) => !keep(dir, hook.item));
-  if (sharing.length === 0) return undefined;
-  const linked = sharing.map((dir) => join(dir, hook.item)).find((path) => isSymlink(path) && existsSync(path));
-  const shared = join(sharedDir(home, source.id), hook.item);
-  const file = linked ?? shared;
+  const file = sharedSettingsFile(home, source, dirs, keep);
+  if (!hook || !file) return undefined;
 
   const created = !lexists(file);
   const settings = created ? {} : readSettings(file);
