@@ -337,10 +337,13 @@ export async function excludeCommand(args: string[]): Promise<void> {
   if (isHistory(item)) {
     const report = run(() => excludeHistory(home, id, item));
     if (!report) return p.outro(`${id} already keeps its own ${kindName(item)}.`);
-    printCopies(report);
     const also = item === "memory" ? " and conversations" : "";
+    const kept = `${id} keeps its own ${kindName(item)}${also} from now on.`;
+    if (report.copied.length === 0) return p.outro(kept);
+    printCopies(report);
+    // Which of them were the seat's own can't be told apart any more.
     return p.outro(
-      `${id} keeps its own ${kindName(item)}${also}. Nothing from the other seats reaches it from now on.`,
+      `${kept}\n${pc.yellow("It holds a copy of everything it could see until now, the other seats' too. Delete what isn't its own from the paths above.")}`,
     );
   }
 

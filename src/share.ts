@@ -5,6 +5,7 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmdirSync,
   rmSync,
   unlinkSync,
@@ -80,10 +81,11 @@ function absorbFile(local: string, shared: string, report: ShareReport, { opaque
   const localNewer = mtime(local) > mtime(shared);
   if (opaque) {
     if (!localNewer) return false;
+    // Renamed, not rewritten: both keep their timestamps, so resume lists them where they were.
     const saved = backupPath(shared);
-    writeFileSync(saved, sharedData);
+    renameSync(shared, saved);
+    renameSync(local, shared);
     report.backups.push(saved);
-    writeFileSync(shared, localData);
     return true;
   }
   const [newer, older] = localNewer ? [localData, sharedData] : [sharedData, localData];
@@ -134,7 +136,7 @@ function absorb(local: string, shared: string, report: ShareReport, options: Sha
   }
 
   if (from.isFile() && to.isFile() && absorbFile(local, shared, report, options)) {
-    rmSync(local);
+    rmSync(local, { force: true });
   }
 }
 

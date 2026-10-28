@@ -13,10 +13,11 @@ import { join } from "node:path";
 import { excludeHistory, includeHistory } from "../src/commands/exclude.ts";
 import { planExport } from "../src/commands/export.ts";
 import { removeSeat, renameSeat } from "../src/commands/manage.ts";
+import { applyMigration, planMigration } from "../src/commands/migrate.ts";
 import { copyTranscript } from "../src/commands/run.ts";
 import { listSessions, moveSession } from "../src/commands/sessions.ts";
 import { syncSeats } from "../src/commands/sync.ts";
-import { linkSessionHistory, setHistorySharing } from "../src/history.ts";
+import { historyPlan, linkHistory, linkSessionHistory, setHistorySharing } from "../src/history.ts";
 import type { RunningProcess } from "../src/processes.ts";
 import { claudeHistory, gitRoot } from "../src/providers/claude/history.ts";
 import { seatSourceById } from "../src/providers/index.ts";
@@ -96,6 +97,10 @@ describe("seats share sessions", () => {
       expect(isLink(join(seat(slug), "file-history"))).toBe(true);
       expect(text(join(seat(slug), "projects/-repo/s1.jsonl"))).toContain("from b");
     }
+    // The winner moved in whole, timestamp and all, so resume lists it where it was.
+    const b = Date.now() - 10_000;
+    expect(Math.abs(statSync(shared("projects/-repo/s1.jsonl")).mtimeMs - b)).toBeLessThan(1000);
+    expect(isLink(join(seat("a"), "plans"))).toBe(true);
     const kept = backedUp(report.backups);
     expect(kept).toContain("from a");
     expect(kept).toContain("from c");
@@ -146,6 +151,22 @@ describe("seats share sessions", () => {
     expect(isLink(join(seat("a"), "projects"))).toBe(false);
     expect(existsSync(shared("projects"))).toBe(false);
     expect(readConfig(env.home).shareSessions).toBeUndefined();
+  });
+
+  test("a seat added later whose CLI is running keeps its conversations until it's closed", () => {
+    seats("a", "b");
+    setHistorySharing(env.home, "sessions", true, { processes: none });
+    seats("c");
+    transcript("c", "s9", { type: "user" });
+    const plan = historyPlan(env.home, claude)!;
+    const running = (): RunningProcess[] => [{ pid: 4242, argv: ["claude"], env: { CLAUDE_CONFIG_DIR: seat("c") } }];
+
+    linkHistory(plan, { processes: running });
+    expect(isLink(join(seat("c"), "projects"))).toBe(false);
+
+    linkHistory(plan, { processes: none });
+    expect(isLink(join(seat("c"), "projects"))).toBe(true);
+    expect(existsSync(shared("projects/-repo/s9.jsonl"))).toBe(true);
   });
 
   test("sync links a seat added later", () => {
@@ -411,6 +432,35 @@ describe("with shared history", () => {
     renameSeat(env.home, "claude:b", "other", { processes: none });
     expect(text(join(seat("other"), "projects/-repo/s1.jsonl"))).toContain("b's");
     expect(text(shared("projects/-repo/memory/note.md"))).toBe("x");
+  });
+
+  test("seats migrate keeps a legacy seat's links to shared conversations and memory", () => {
+    env.write(".claude-old/.claude.json", "{}");
+    seats("b");
+    env.write(".claude-old/projects/-repo/memory/note.md", "x");
+    transcript("b", "s1", { type: "user", message: { content: "b's" } });
+    setHistorySharing(env.home, "memory", true);
+    expect(isLink(join(env.home, ".claude-old/projects/-repo/memory"))).toBe(true);
+    setHistorySharing(env.home, "sessions", true, { processes: none });
+    expect(isLink(join(env.home, ".claude-old/projects"))).toBe(true);
+
+    applyMigration(env.home, planMigration(env.home));
+
+    expect(existsSync(join(env.home, ".claude-old"))).toBe(false);
+    expect(text(join(seat("old"), "projects/-repo/s1.jsonl"))).toContain("b's");
+    expect(text(join(seat("old"), "projects/-repo/memory/note.md"))).toBe("x");
+  });
+
+  test("seats migrate keeps a memory link nested in a legacy seat's own conversations", () => {
+    env.write(".claude-old/.claude.json", "{}");
+    seats("b");
+    env.write(".claude-old/projects/-repo/memory/note.md", "x");
+    setHistorySharing(env.home, "memory", true);
+
+    applyMigration(env.home, planMigration(env.home));
+
+    expect(isLink(join(seat("old"), "projects/-repo/memory"))).toBe(true);
+    expect(text(join(seat("old"), "projects/-repo/memory/note.md"))).toBe("x");
   });
 
   test("seats export leaves conversations and memory out", () => {

@@ -7,6 +7,7 @@ import { historyPlan, linkHistory } from "../history.ts";
 import { tidySharedHooks } from "../hook-paths.ts";
 import { type InstructionsReport, syncInstructions } from "../instructions.ts";
 import { type McpSyncReport, syncMcp } from "../mcp/library.ts";
+import { runningProcesses } from "../processes.ts";
 import { instructionsTargets, providers, seatSources, skillsTargets } from "../providers/index.ts";
 import { shareItems } from "../share.ts";
 import { type SkillsReport, syncSkills } from "../skills.ts";
@@ -70,7 +71,7 @@ export function syncSeats(home: string, only?: string[], { dryRun = false } = {}
     // Conversations and memory, when `seats share` turned them on: a new seat or project joins in.
     const history = historyPlan(home, source, config, folders);
     if (history) {
-      const linked = linkHistory(history);
+      const linked = linkHistory(history, { processes: runningProcesses });
       report.linked.push(...linked.linked);
       report.backups.push(...linked.backups);
     }

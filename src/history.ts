@@ -24,6 +24,7 @@ type History = NonNullable<SeatSource["history"]>;
 
 /** Who shares what for one tool: conversations (memory with them), memory alone, or neither. */
 export type HistoryPlan = {
+  home: string;
   source: SeatSource;
   history: History;
   /** `shared/<tool>`: shared conversations land in `projects/` there, shared memory in `projects/<folder>/memory`. */
@@ -55,7 +56,7 @@ export function historyPlan(
     ? folders.filter((folder) => !sessions.includes(folder) && !ownMemory.includes(folder.id))
     : [];
   const own = folders.filter((folder) => !sessions.includes(folder) && !memory.includes(folder));
-  return { source, history, root: sharedDir(home, source.id), sessions, memory, own };
+  return { home, source, history, root: sharedDir(home, source.id), sessions, memory, own };
 }
 
 export const historyPlans = (home: string, config?: SeatsConfig) =>
@@ -141,17 +142,43 @@ function conflicts(dirs: string[], root: string, items: string[]): string[] {
   return [...found].sort();
 }
 
+/** The CLI's processes running on seat folder `dir` right now. Lists processes once, on first use. */
+function runningOn(plan: HistoryPlan, processes: () => RunningProcess[]): (dir: string) => RunningProcess[] {
+  const { binary, configDirEnv, livePath } = plan.source;
+  let listed: RunningProcess[] | undefined;
+  const running = () => (listed ??= processes());
+  return (dir) =>
+    binary && configDirEnv ? processesUsing(binary, configDirEnv, dir, running, livePath?.(plan.home)) : [];
+}
+
 /**
  * Links every seat that shares history to the shared copy, merging what it
  * has of its own first: the newest copy of a file wins and the others are
  * kept as `*.seats-backup`. `extra` names project folders to link memory for
- * even before any seat has some (the one a session just opened in).
+ * even before any seat has some (the one a session just opened in). With
+ * `processes`, a seat whose CLI is running keeps its own conversations until
+ * it's closed, since they'd move under it; memory moves regardless.
  */
-export function linkHistory(plan: HistoryPlan, { dryRun = false, extra = [] as string[] } = {}): HistoryReport {
+export function linkHistory(
+  plan: HistoryPlan,
+  {
+    dryRun = false,
+    extra = [] as string[],
+    processes,
+  }: { dryRun?: boolean; extra?: string[]; processes?: () => RunningProcess[] } = {},
+): HistoryReport {
   const report = emptyReport();
   const { history, root } = plan;
+  const using = processes ? runningOn(plan, processes) : () => [];
+  const busy = (dir: string) => using(dir).length > 0;
   const groups = [
-    { dirs: plan.sessions.map((folder) => folder.dir), items: history.items, extra: [] as string[] },
+    {
+      dirs: plan.sessions
+        .map((folder) => folder.dir)
+        .filter((dir) => realCopies([dir], history.items).length === 0 || !busy(dir)),
+      items: history.items,
+      extra: [] as string[],
+    },
     {
       dirs: plan.memory.map((folder) => folder.dir).filter((dir) => !isSymlink(join(dir, history.projects))),
       items: plan.memory.length > 0 ? memoryItems(plan, extra) : [],
@@ -167,9 +194,10 @@ export function linkHistory(plan: HistoryPlan, { dryRun = false, extra = [] as s
       report.backups.push(...conflicts(dirs, root, items));
       continue;
     }
-    for (const name of group.extra) {
-      const shared = join(root, history.projects, name, history.memory);
-      if (!lexists(shared)) mkdirSync(shared, { recursive: true, mode: 0o700 });
+    // Every item exists up front, so a seat links even what its CLI hasn't created yet.
+    const made = group === groups[0] ? items : group.extra.map((name) => join(history.projects, name, history.memory));
+    for (const item of made) {
+      if (!lexists(join(root, item))) mkdirSync(join(root, item), { recursive: true, mode: 0o700 });
     }
     const shared = shareItems(dirs, root, items, undefined, { opaque: true });
     report.linked.push(...shared.linked);
@@ -219,19 +247,12 @@ function movingSessions(before: HistoryPlan, after: HistoryPlan): SeatFolder[] {
  * Conversations are appended to while their CLI runs, so they don't move
  * then: a session writing on in a moved-away copy would lose its turns.
  */
-function assertIdle(home: string, plan: HistoryPlan, folders: SeatFolder[], processes: () => RunningProcess[]): void {
-  const { binary, configDirEnv, livePath } = plan.source;
-  if (!binary || !configDirEnv) return;
-  let listed: RunningProcess[] | undefined;
-  const running = () => (listed ??= processes());
-  const busy = folders.flatMap((folder) =>
-    processesUsing(binary, configDirEnv, folder.dir, running, livePath?.(home)).map(
-      (item) => `${folder.id} (pid ${item.pid})`,
-    ),
-  );
+function assertIdle(plan: HistoryPlan, folders: SeatFolder[], processes: () => RunningProcess[]): void {
+  const using = runningOn(plan, processes);
+  const busy = folders.flatMap((folder) => using(folder.dir).map((item) => `${folder.id} (pid ${item.pid})`));
   if (busy.length > 0)
     throw new Error(
-      `${binary} is running on ${busy.join(", ")}. Close it first: its conversation would move under it.`,
+      `${plan.source.binary} is running on ${busy.join(", ")}. Close it first: its conversations would move under it.`,
     );
 }
 
@@ -258,7 +279,7 @@ export function applyHistory(
     before,
     after: historyPlan(home, before.source, next)!,
   }));
-  for (const { before, after } of plans) assertIdle(home, after, movingSessions(before, after), processes);
+  for (const { before, after } of plans) assertIdle(after, movingSessions(before, after), processes);
 
   for (const { before, after } of plans) {
     const { history, root } = after;
@@ -322,7 +343,7 @@ export function linkSessionHistory(home: string, source: SeatSource, dir: string
     const plan = historyPlan(home, source, config);
     if (!plan) return;
     const memory = plan.memory.some((folder) => sameFile(folder.dir, dir));
-    linkHistory(plan, { extra: memory && cwd ? [plan.history.memoryProject(cwd)] : [] });
+    linkHistory(plan, { extra: memory && cwd ? [plan.history.memoryProject(cwd)] : [], processes: runningProcesses });
   } catch {
     // A session starts whether or not its history could be linked.
   }
