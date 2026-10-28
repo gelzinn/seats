@@ -60,10 +60,12 @@ export function resumeCommand(home: string, agent: string, sessionId: string): s
  * `claude --resume` or `codex resume` (those open the active seat).
  *
  * A status change every turn costs one `pane get`: the seats are only
- * searched when the pane's session differs from the one last reported, or
- * when an agent process is detected (a restore, or an auto-switch reopening
- * the same session on the next seat), and a command already reported isn't
- * sent again except on detection.
+ * searched when the pane's session differs from the one last settled. An
+ * agent process detected in the pane (a restore, or an auto-switch reopening
+ * the same session on the next seat) unsettles it and is always reported;
+ * the next status change searches once more, since right after a switch
+ * both seats may hold the same copy, mtime included. A command already
+ * reported isn't sent again except on detection.
  */
 export function reportHerdrResume(home: string, env: NodeJS.ProcessEnv = process.env): void {
   const event = parse(env.HERDR_PLUGIN_EVENT_JSON);
@@ -75,29 +77,31 @@ export function reportHerdrResume(home: string, env: NodeJS.ProcessEnv = process
   const stateFile = env.HERDR_PLUGIN_STATE_DIR ? join(env.HERDR_PLUGIN_STATE_DIR, "reported.json") : undefined;
   const state = stateFile ? parse(readText(stateFile)) : {};
   const detected = env.HERDR_PLUGIN_EVENT === "pane.agent_detected";
+  // `{ session, command }` per pane, `session` once settled; older versions kept only the command.
+  const saved = state[paneId];
+  const last = typeof saved === "string" ? { command: saved } : record(saved);
+  const save = (entry: Json) => {
+    if (!stateFile) return;
+    state[paneId] = entry;
+    mkdirSync(env.HERDR_PLUGIN_STATE_DIR!, { recursive: true });
+    writeFileSync(stateFile, `${JSON.stringify(state)}\n`);
+  };
+  if (detected && last.session) save({ command: last.command });
 
   const got = run(["pane", "get", paneId]);
   if (got.status !== 0) return;
   const pane = record(record(parse(got.stdout).result).pane);
   const session = record(pane.agent_session);
   if (typeof pane.agent !== "string" || session.kind !== "id" || typeof session.value !== "string") return;
-  // `{ session, command }` per pane; older versions kept only the command.
-  const saved = state[paneId];
-  const last = typeof saved === "string" ? { command: saved } : record(saved);
   const sessionKey = `${pane.agent}:${session.value}`;
   if (!detected && last.session === sessionKey) return;
 
   const argv = resumeCommand(home, pane.agent, session.value);
   if (!argv || !resumableInHerdr(argv)) return;
   const command = argv.join(" ");
-  const save = () => {
-    if (!stateFile) return;
-    state[paneId] = { session: sessionKey, command };
-    mkdirSync(env.HERDR_PLUGIN_STATE_DIR!, { recursive: true });
-    writeFileSync(stateFile, `${JSON.stringify(state)}\n`);
-  };
+  const settle = () => save(detected ? { command } : { session: sessionKey, command });
   if (!detected && last.command === command) {
-    save();
+    settle();
     return;
   }
 
@@ -118,7 +122,7 @@ export function reportHerdrResume(home: string, env: NodeJS.ProcessEnv = process
   ]);
   // Refused (herdr hasn't detected the agent in the pane yet): the next event tries again.
   if (reported.status !== 0) return;
-  save();
+  settle();
 }
 
 function readText(file: string): string | undefined {

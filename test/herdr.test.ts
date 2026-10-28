@@ -124,14 +124,8 @@ describe("seats hook herdr", () => {
     expect(hook(bin, log)).toHaveLength(1);
     expect(hook(bin, log, "pane.agent_detected")).toHaveLength(2);
 
-    // Moved under the same id (an auto-switch): herdr detects the new claude process.
     transcript("personal", "s1", 2_000);
-    expect(hook(bin, log)).toHaveLength(2);
-    expect(hook(bin, log, "pane.agent_detected")).toEqual([
-      report("work", "s1"),
-      report("work", "s1"),
-      report("personal", "s1"),
-    ]);
+    expect(hook(bin, log)).toEqual([report("work", "s1"), report("work", "s1"), report("personal", "s1")]);
   });
 
   test("searches the seats again only when the pane's session changes", () => {
@@ -147,6 +141,19 @@ describe("seats hook herdr", () => {
     expect(hook(bin, log)).toEqual([report("work", "s1"), report("personal", "s2")]);
     const state = JSON.parse(readFileSync(join(env.home, "state/reported.json"), "utf8"));
     expect(state["w1:p2"]).toEqual({ session: "claude:s2", command: "seats run claude:personal --resume s2" });
+  });
+
+  test("after a detection, the next status change searches once more", () => {
+    const { bin, log } = fakeHerdr();
+    transcript("work", "s1", 1_000);
+    pane("claude", "s1");
+    hook(bin, log);
+    // An auto-switch: the old claude exits and the new one starts before the copy has a newer mtime.
+    expect(hook(bin, log, "pane.agent_detected")).toEqual([report("work", "s1"), report("work", "s1")]);
+    transcript("personal", "s1", 2_000);
+    expect(hook(bin, log)).toEqual([report("work", "s1"), report("work", "s1"), report("personal", "s1")]);
+    rmSync(join(env.home, ".config/seats/claude/personal"), { recursive: true });
+    expect(hook(bin, log)).toHaveLength(3);
   });
 
   test("reads the state older versions saved, a command per pane", () => {
