@@ -3,6 +3,7 @@
 import { version } from "../package.json";
 import { addCommand } from "./commands/add.ts";
 import { desktopCommand } from "./commands/desktop.ts";
+import { doctorCommand } from "./commands/doctor.ts";
 import { excludeCommand, includeCommand } from "./commands/exclude.ts";
 import { exportCommand, importCommand } from "./commands/export.ts";
 import { healthCommand } from "./commands/health.ts";
@@ -60,7 +61,10 @@ Usage:
                         pick one (--yes to skip the question, --keep-login to
                         skip the sign-out)
   seats sync            Share config and trust between seats, and MCP servers,
-                        skills and instructions across tools (--dry-run to preview)
+                        skills and instructions across tools; point hooks that
+                        run through one seat at the shared copy (--dry-run to preview)
+  seats doctor          Check the session hook, seats on PATH, the herdr plugin
+                        and integrations, and Paseo's plugin path, with a fix for each
   seats exclude <id> [<item> | mcp <name> | trust]
                         Keep a shared item (CLAUDE.md, skills…), an MCP server
                         or folder trust out of one seat; with no item, list
@@ -76,6 +80,10 @@ Usage:
   seats uninstall mcp|skill <name>
                         Remove it from every tool; a server is marked so sync
                         won't add it back (--dry-run to preview)
+  seats install plugin herdr
+  seats uninstall plugin herdr
+                        Add or remove the herdr plugin that resumes panes on
+                        their seat (--dry-run to preview; paseo prints the steps)
   seats export <folder> Write your shared setup (MCP servers, skills, instructions,
                         shared tool config) to a folder, without secrets or
                         accounts, to carry to another machine (--dry-run to preview)
@@ -113,6 +121,8 @@ Examples:
   seats install mcp docs -- npx -y docs-mcp
   seats install skill ./review --dry-run
   seats uninstall mcp docs
+  seats install plugin herdr
+  seats doctor
   seats export ~/dotfiles/seats
   seats import ~/dotfiles/seats --dry-run
 `;
@@ -127,6 +137,7 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   export: exportCommand,
   current: currentCommand,
   desktop: desktopCommand,
+  doctor: doctorCommand,
   exclude: excludeCommand,
   health: healthCommand,
   hook: hookCommand,

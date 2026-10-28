@@ -47,6 +47,14 @@ export type SeatSource = {
   sessionHook?: {
     item: string;
     add: (settings: Record<string, unknown>, command: string) => Record<string, unknown> | undefined;
+    /**
+     * Passes every hook and status line command through `rewrite`, then drops
+     * hooks that became copies of another. Undefined when nothing changes.
+     */
+    tidy?: (
+      settings: Record<string, unknown>,
+      rewrite: (command: string) => string,
+    ) => Record<string, unknown> | undefined;
   };
   /** Seat files that may hold absolute paths to the seat folder, rewritten by `seats migrate`. */
   pathFiles?: string[];

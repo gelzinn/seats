@@ -143,6 +143,19 @@ It reads the same usage endpoints the tools' apps show, so it sends no prompt an
 
 Use `usage` to see which seat has room left. Use `health` when you need proof that a seat actually answers.
 
+`seats doctor` checks what the session hook and the herdr and Paseo plugins depend on, and changes nothing:
+
+```text
+✓ seats is on your PATH (~/.local/bin/seats)
+✓ the session hook is in ~/.config/seats/shared/claude/settings.json (not for claude:acme, which keep their own)
+! ~/.config/seats/shared/claude/settings.json runs hooks through one seat's folder, or the same hook twice
+    seats sync
+✓ herdr has the seats plugin, from GitHub
+✓ herdr's claude integration is installed
+```
+
+It looks at whether `seats` is on your `PATH` and is this same version, the session hook in the shared Claude `settings.json`, hooks there that run through one seat's folder, herdr's version, whether herdr has the seats plugin (enabled, and linked from a folder that still exists), herdr's own Claude and Codex integrations, and a Paseo config still loading the plugin from `integrations/paseo`. Each problem comes with the command that fixes it. It exits with status 1 when something needs fixing.
+
 ## Pick the seat per project
 
 A `.seats` file in a project names the seat each tool uses there, so a client's work runs on the client's account and stays in that account's history:
@@ -328,6 +341,7 @@ When a tool has two or more seats, activating one of them, or running `seats syn
 - **Symlinks you made yourself** that point outside the seat folders, for example into a dotfiles repo, are left untouched.
 - **`.claude.json`** is merged in place. Trust and approvals are only ever added, never revoked. An MCP server already defined in a seat is never overwritten. Everything else in the file is left alone. Writes go through the `~/.claude.json` symlink and keep mode `600`. A seat whose file doesn't parse is skipped.
 - **Trust between syncs.** `seats sync`, switching and `seats add` put a `SessionStart` and a `Stop` hook running `seats hook session` in the shared Claude `settings.json`, next to any hooks you already have. It does nothing when `seats` isn't on the `PATH` Claude Code sees, for example a Claude started from a desktop launcher without `~/.local/bin`. When a session trusts a folder or approves a tool, the hook carries it to the other seats right away, so it works for plain `claude` too. It never rewrites the `.claude.json` of the seat it runs in, nor of a seat whose Claude is open (Claude Code rewrites that file itself); those pick it up when seats next launches them, since `seats run`, the picker, `seats move`, auto-switch and herdr restores all merge the other seats' trust into a seat just before it starts. A seat that keeps its own `settings.json` doesn't get the hook, so trust given there only spreads on `seats sync` or its next launch through seats.
+- **Hooks that run through one seat.** A tool that installs a hook from inside a seat, such as `herdr integration install claude` with `CLAUDE_CONFIG_DIR` set, writes that seat's path into the shared `settings.json`, so every seat runs a path that breaks when that seat is renamed or removed, and the same hook can end up there once per seat. `seats sync` points hook and status line commands that reach a shared item (`hooks/`, `statusline-command.sh`…) through a seat folder, the shared folder or a seat that's gone at the live path (`~/.claude/hooks/…`), which leads to the same shared copy. That's also the path herdr writes from a plain shell and recognises as its own hook, so its next install doesn't add another. When the active seat keeps its own copy of the item, the shared folder's path is used instead. Then it keeps one of each hook per event: one whose matcher covers every event wins, otherwise the first gets both matchers joined with `|` (when that entry runs nothing else; if not, both stay). Paths to an item a seat keeps out stay as they are. `--dry-run` lists the file.
 
 </details>
 
@@ -461,14 +475,16 @@ seatEnv("claude", "work"); // { CLAUDE_CONFIG_DIR: "/home/you/.config/seats/clau
 
 `listSeatDirs(provider)` lists every seat folder, signed in or not. `pinnedSeat(provider, cwd)` returns the `{ slug, file }` a project's `.seats` pins, or undefined. It doesn't check that the seat exists, so pass the slug to `seatDir` and report a missing seat rather than falling back. The library only reads folders and never runs a CLI.
 
-**Paseo.** [`plugins/paseo`](plugins/paseo) is a Paseo plugin that sets `CLAUDE_CONFIG_DIR` from seats whenever a `claude-<seat>` provider opens a session. Keep the provider's `env` in Paseo's `config.json` too, because provider diagnostics and model listing don't go through the plugin. Paseo only loads modules from inside the plugin folder, so the plugin installs seats as a copy (`install-links`). After changing the library, run `bun run build` here and `npm install` in `plugins/paseo`, then reload the plugin. It used to live in `integrations/paseo`: if you linked Paseo to that path, point it at `plugins/paseo` instead.
+**Paseo.** [`plugins/paseo`](plugins/paseo) is a Paseo plugin that sets `CLAUDE_CONFIG_DIR` from seats whenever a `claude-<seat>` provider opens a session. Keep the provider's `env` in Paseo's `config.json` too, because provider diagnostics and model listing don't go through the plugin. Paseo only loads modules from inside the plugin folder, so the plugin installs seats as a copy (`install-links`). After changing the library, run `bun run build` here and `npm install` in `plugins/paseo`, then reload the plugin. `seats install plugin paseo` prints the config to add. It used to live in `integrations/paseo`: if you linked Paseo to that path, point it at `plugins/paseo` instead (`seats doctor` notices).
 
 **herdr.** [`plugins/herdr`](plugins/herdr) makes [herdr](https://herdr.dev) reopen each Claude Code and Codex pane on the seat its conversation ran on. On its own, herdr restores those panes after a restart with `claude --resume <id>` or `codex resume <id>`, which open the active seat. The plugin runs `seats hook herdr` when herdr detects Claude Code or Codex in a pane or the pane's status changes, finds the seat that has the conversation (the most recently written copy, when several have it) and reports `seats run claude:<seat> --resume <id>` or `seats run codex:<seat> resume <id>` to herdr, which then uses it over its own. Codex conversations are only found by file name, never listed or copied, so `seats sessions` and `seats move` stay Claude-only. Needs herdr 0.9.2 or later, its integration for each tool (`herdr integration install claude`, `herdr integration install codex`) and `seats` on your `PATH`:
 
 ```bash
-herdr plugin install gelzinn/seats/plugins/herdr
-herdr plugin link ./plugins/herdr   # or from a checkout
+seats install plugin herdr     # --dry-run prints the herdr command
+seats uninstall plugin herdr
 ```
+
+From a checkout it runs `herdr plugin link <checkout>/plugins/herdr`; from an installed binary, `herdr plugin install gelzinn/seats/plugins/herdr --ref v<version> --yes`, pinned to the installed seats version. It stops with a clear message when `herdr` or `seats` isn't on your `PATH`. The hook only searches the seat folders when a pane's conversation changes or herdr detects a new agent process in it (a restore, or an auto-switch reopening the conversation on the next seat), so a status change every turn costs one `herdr pane get`.
 
 ## Supported providers
 
@@ -523,6 +539,7 @@ Seats never signs in for you and never sends credentials anywhere. Keys stay in 
 | `src/share.ts`, `src/skills.ts`, `src/instructions.ts` | Sharing files between seats, and skills and instructions across tools |
 | `src/mcp/` | The tool-neutral MCP library and the JSON helpers adapters build on |
 | `src/trust.ts`, `src/herdr.ts` | Folder trust between seats on launch and from the session hook; resume commands for herdr |
+| `src/hook-paths.ts` | Points hooks in the shared settings that run through one seat at the shared copy |
 | `src/fs.ts`, `src/types.ts`, `src/lib.ts` | Filesystem helpers, shared types, and the library API for other tools |
 | `plugins/` | The Paseo and herdr plugins |
 | `test/` | Tests, mirroring `src/`; `test/helpers/temp-home.ts` builds a throwaway `$HOME` |
