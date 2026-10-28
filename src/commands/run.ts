@@ -102,6 +102,16 @@ export function copyTranscript(transcript: string, fromDir: string, toDir: strin
   return to;
 }
 
+/**
+ * Copies conversation `sessionId` from seat `from` to `to` before a switch.
+ * Only for sources whose sessions resume on another account, which is what
+ * a `failover` declares; false when it can't be found or copied.
+ */
+function moveSession(source: SeatSource, sessionId: string, from: Seat, to: Seat): boolean {
+  const transcript = source.failover ? source.sessions?.find?.(from.dir!, sessionId) : undefined;
+  return transcript !== undefined && copyTranscript(transcript, from.dir!, to.dir!) !== undefined;
+}
+
 /** The shell command a CLI hook runs to reach `seats hook limit`, in this same install. */
 function hookShellCommand(): string {
   const quote = (part: string) => `'${part.replace(/'/g, `'\\''`)}'`;
@@ -198,8 +208,21 @@ export async function supervise(options: SuperviseOptions): Promise<number> {
     tried.add(seat.id);
     const next = await nextAvailable(await seats(), seat, tried, usageOf);
     if (!next.seat) return allOut(await seats(), [...resets(startUsage), ...next.resets]);
-    say(`${seat.id} is at its usage limit. Using ${pc.bold(next.seat.id)}.`);
-    seat = next.seat;
+    const resumed = source.sessions?.resumedId?.(options.args);
+    if (!resumed) {
+      say(`${seat.id} is at its usage limit. Using ${pc.bold(next.seat.id)}.`);
+      seat = next.seat;
+    } else if (moveSession(source, resumed, seat, next.seat)) {
+      say(`${seat.id} is at its usage limit. Continuing the conversation on ${pc.bold(next.seat.id)}.`);
+      seat = next.seat;
+    } else {
+      // The next seat would open without the conversation: better the right one at its limit.
+      say(
+        pc.yellow(
+          `${seat.id} is at its usage limit, but its conversation can't move to ${next.seat.id}. Opening it here.`,
+        ),
+      );
+    }
   }
 
   mkdirSync(seatsHome(home), { recursive: true, mode: 0o700 });

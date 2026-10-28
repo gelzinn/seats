@@ -38,4 +38,5 @@ export function findCodexSession(dir: string, sessionId: string): string | undef
 export const codexSessions: NonNullable<SeatSource["sessions"]> = {
   resumeArgs: (sessionId) => ["resume", sessionId],
   find: findCodexSession,
+  resumedId: ([command, id]) => (command === "resume" && id && !id.startsWith("-") ? id : undefined),
 };
