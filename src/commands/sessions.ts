@@ -133,7 +133,7 @@ export async function sessionsCommand(argv: string[]): Promise<void> {
     .filter((source) => source.sessions?.noMove)
     .map(
       (source) =>
-        `${source.label} conversations stay on their seat. Reopen one with seats run ${source.id}:<seat> ${source.sessions!.resumeArgs("<id>").join(" ")}.`,
+        `${source.label} conversations stay on their seat. Reopen one with seats run <seat> ${source.sessions!.resumeArgs("<id>").join(" ")}.`,
     );
   if (sources.some((source) => !source.sessions?.noMove))
     hints.push("Continue one on another seat with seats move <id> <seat>.");
