@@ -43,8 +43,8 @@ Usage:
                         Show each seat's 5-hour and weekly usage, without
                         sending a prompt (--json for scripts)
   seats sessions [tool|id] [--all]
-                        Conversations from every Claude seat, newest first:
-                        this folder's, or every project's with --all
+                        Conversations from every Claude and Codex seat, newest
+                        first: this folder's, or every project's with --all
   seats move <session> <seat>
                         Copy a conversation to another seat (the original
                         stays) and offer to reopen it there (--force to replace)

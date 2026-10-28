@@ -79,6 +79,8 @@ export function moveSession(sessions: SeatSession[], prefix: string, target: Sea
   const copies = findSession(sessions, prefix);
   const { id, seat } = copies[0]!;
   if (seat.source !== target.source) throw new Error(`${id} is a ${seat.source} conversation; ${target.id} isn't.`);
+  const noMove = seatSourceById(seat.source).sessions?.noMove;
+  if (noMove) throw new Error(noMove);
   const others = copies.filter((session) => session.seat.id !== target.id);
   if (others.length === 0) throw new Error(`${shortId(id)} is already on ${target.id}. Name another seat.`);
   if (others.length < copies.length && !force)
@@ -100,7 +102,8 @@ export async function sessionsCommand(argv: string[]): Promise<void> {
   const cwd = process.cwd();
   intro();
   const seats = (await sessionSeats(home)).filter((seat) => matchesFilter(seat, filter));
-  if (seats.length === 0) fail(filter ? `No Claude seat matches ${filter}.` : "No Claude seats found.");
+  if (seats.length === 0)
+    fail(filter ? `No seat with conversations matches ${filter}.` : "No seats with conversations found.");
 
   const sessions = listSessions(seats).filter((session) => all || inFolder(session, cwd));
   if (sessions.length === 0)
@@ -109,21 +112,32 @@ export async function sessionsCommand(argv: string[]): Promise<void> {
     );
 
   const now = new Date();
-  const titleWidth = Math.max(20, (process.stdout.columns || 120) - 80);
-  const rows = sessions
-    .slice(0, LIMIT)
-    .map((session) => [
-      session.seat.id,
-      pc.dim(ago(session.updatedAt, now)),
-      session.cwd ? tilde(session.cwd) : pc.dim("—"),
-      truncate(session.title, titleWidth),
-      pc.cyan(shortId(session.id)),
-    ]);
+  const shown = sessions.slice(0, LIMIT);
+  const sources = [...new Set(shown.map((session) => session.seat.source))].map(seatSourceById);
+  // Only seats move takes a prefix; a conversation that can't move is reopened by its whole id.
+  const fullId = (session: SeatSession) => seatSourceById(session.seat.source).sessions?.noMove !== undefined;
+  const idWidth = Math.max(...shown.map((session) => (fullId(session) ? session.id.length : 8)));
+  const titleWidth = Math.max(20, (process.stdout.columns || 120) - 72 - idWidth);
+  const rows = shown.map((session) => [
+    session.seat.id,
+    pc.dim(ago(session.updatedAt, now)),
+    session.cwd ? tilde(session.cwd) : pc.dim("—"),
+    truncate(session.title, titleWidth),
+    pc.cyan(fullId(session) ? session.id : shortId(session.id)),
+  ]);
   console.log(table(["Seat", "When", "Project", "Title", "Id"], rows));
   const more = sessions.length - LIMIT;
   if (more > 0)
     p.log.message(pc.dim(`${more} older ${more === 1 ? "conversation isn't" : "conversations aren't"} shown.`));
-  p.outro(pc.dim("Continue one on another seat with seats move <id> <seat>."));
+  const hints = sources
+    .filter((source) => source.sessions?.noMove)
+    .map(
+      (source) =>
+        `${source.label} conversations stay on their seat. Reopen one with seats run ${source.id}:<seat> ${source.sessions!.resumeArgs("<id>").join(" ")}.`,
+    );
+  if (sources.some((source) => !source.sessions?.noMove))
+    hints.push("Continue one on another seat with seats move <id> <seat>.");
+  p.outro(pc.dim(hints.join("\n")));
 }
 
 /**

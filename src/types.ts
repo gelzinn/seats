@@ -109,7 +109,8 @@ export type SeatSource = {
    * The conversations a seat keeps. With `list`, for `seats sessions` and
    * `seats move`: a session is one file that resumes from the same path in
    * any seat. With only `find`, seats can name the seat that has a session
-   * (`seats hook herdr`) but never lists or copies them.
+   * (`seats hook herdr`) but never lists or copies them. With `noMove`, it
+   * lists them but `seats move` refuses.
    */
   sessions?: {
     /** Conversations kept in the seat folder `dir`, in no particular order. */
@@ -120,6 +121,8 @@ export type SeatSource = {
     find?: (dir: string, sessionId: string) => string | undefined;
     /** The session that CLI args reopen, read back from what `resumeArgs` writes; undefined for a new session. */
     resumedId?: (args: string[]) => string | undefined;
+    /** Why a copy wouldn't resume on another seat, for `seats move` to say instead of copying. */
+    noMove?: string;
   };
 };
 
