@@ -143,6 +143,19 @@ It reads the same usage endpoints the tools' apps show, so it sends no prompt an
 
 Use `usage` to see which seat has room left. Use `health` when you need proof that a seat actually answers.
 
+`seats doctor` checks what the session hook and the herdr and Paseo plugins depend on, and changes nothing:
+
+```text
+✓ seats is on your PATH (~/.local/bin/seats)
+✓ the session hook is in ~/.config/seats/shared/claude/settings.json (not for claude:acme, which keep their own)
+! ~/.config/seats/shared/claude/settings.json runs hooks through one seat's folder, or the same hook twice
+    seats sync
+✓ herdr has the seats plugin, from GitHub
+✓ herdr's claude integration is installed
+```
+
+It looks at whether `seats` is on your `PATH` and is this same version, the session hook in the shared Claude `settings.json`, hooks there that run through one seat's folder, herdr's version, whether herdr has the seats plugin (enabled, and linked from a folder that still exists), herdr's own Claude and Codex integrations, and a Paseo config still loading the plugin from `integrations/paseo`. Each problem comes with the command that fixes it. It exits with status 1 when something needs fixing.
+
 ## Pick the seat per project
 
 A `.seats` file in a project names the seat each tool uses there, so a client's work runs on the client's account and stays in that account's history:

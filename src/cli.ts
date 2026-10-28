@@ -3,6 +3,7 @@
 import { version } from "../package.json";
 import { addCommand } from "./commands/add.ts";
 import { desktopCommand } from "./commands/desktop.ts";
+import { doctorCommand } from "./commands/doctor.ts";
 import { excludeCommand, includeCommand } from "./commands/exclude.ts";
 import { exportCommand, importCommand } from "./commands/export.ts";
 import { healthCommand } from "./commands/health.ts";
@@ -120,6 +121,8 @@ Examples:
   seats install mcp docs -- npx -y docs-mcp
   seats install skill ./review --dry-run
   seats uninstall mcp docs
+  seats install plugin herdr
+  seats doctor
   seats export ~/dotfiles/seats
   seats import ~/dotfiles/seats --dry-run
 `;
@@ -134,6 +137,7 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   export: exportCommand,
   current: currentCommand,
   desktop: desktopCommand,
+  doctor: doctorCommand,
   exclude: excludeCommand,
   health: healthCommand,
   hook: hookCommand,
