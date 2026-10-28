@@ -61,10 +61,11 @@ Usage:
                         skip the sign-out)
   seats sync            Share config and trust between seats, and MCP servers,
                         skills and instructions across tools (--dry-run to preview)
-  seats exclude <id> [<item> | mcp <name>]
-                        Keep a shared item (CLAUDE.md, skills…) or an MCP server
-                        out of one seat; with no item, list what it keeps out
-  seats include <id> <item> | mcp <name>
+  seats exclude <id> [<item> | mcp <name> | trust]
+                        Keep a shared item (CLAUDE.md, skills…), an MCP server
+                        or folder trust out of one seat; with no item, list
+                        what it keeps out
+  seats include <id> <item> | mcp <name> | trust
                         Share it with that seat again
   seats install mcp <name> -- <command> [args...] [--env KEY=VALUE ...]
   seats install mcp <name> --url <url> [--header "Key: Value" ...] [--sse]
@@ -106,6 +107,7 @@ Examples:
   seats desktop open work
   seats exclude claude:acme CLAUDE.md
   seats exclude claude:acme mcp gmail
+  seats exclude claude:acme trust
   seats rename claude:primary work
   seats remove claude:old
   seats install mcp docs -- npx -y docs-mcp

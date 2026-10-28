@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { excludeItem, excludeMcp, includeItem, includeMcp, listExclusions } from "../../src/commands/exclude.ts";
+import {
+  excludeItem,
+  excludeMcp,
+  excludeTrust,
+  includeItem,
+  includeMcp,
+  includeTrust,
+  listExclusions,
+} from "../../src/commands/exclude.ts";
 import { installMcp, uninstallMcp } from "../../src/commands/install.ts";
 import { syncAll, syncSeats } from "../../src/commands/sync.ts";
 import { readLibrary } from "../../src/mcp/library.ts";
@@ -115,7 +123,9 @@ describe("excludeItem", () => {
     writeFileSync(join(seat("acme"), "settings.json"), '{"model":"acme"}\n');
     syncSeats(home, ["claude"]);
     expect(lstatSync(join(seat("acme"), "settings.json")).isFile()).toBe(true);
-    expect(existsSync(join(home, ".config/seats/shared/claude/settings.json"))).toBe(false);
+    expect(json(join(seat("acme"), "settings.json"))).toEqual({ model: "acme" });
+    // The shared copy holds only the session hook, never what acme keeps.
+    expect(json(join(home, ".config/seats/shared/claude/settings.json")).model).toBeUndefined();
   });
 });
 
@@ -157,7 +167,7 @@ describe("excludeMcp", () => {
     expect(report.mcp.added).not.toContain("claude: gmail");
     expect(json(acme).mcpServers.gmail).toBeUndefined();
     expect(json(join(seat("personal"), ".claude.json")).mcpServers.gmail).toBeDefined();
-    expect(listExclusions(home, "claude:acme")).toEqual({ items: [], mcp: ["gmail"] });
+    expect(listExclusions(home, "claude:acme")).toEqual({ items: [], mcp: ["gmail"], trust: false });
   });
 
   test("seats install leaves the seat out, even with --force and after an uninstall", () => {
@@ -200,6 +210,48 @@ describe("excludeMcp", () => {
     syncSeats(home, ["claude"]);
     expect(json(acme).mcpServers.gmail).toBeDefined();
     expect(() => includeMcp(home, "claude:acme", "gmail")).toThrow("doesn't keep out");
+  });
+});
+
+describe("excludeTrust", () => {
+  test("the seat keeps its own trust on sync, and shares it again after include", () => {
+    const home = twoSeats();
+    const personal = join(seat("personal"), ".claude.json");
+    const acme = join(seat("acme"), ".claude.json");
+    env.write(".config/seats/claude/acme/.claude.json", {
+      ...json(acme),
+      projects: { "/client": { hasTrustDialogAccepted: true } },
+    });
+
+    expect(excludeTrust(home, "claude:acme")).toBe(true);
+    expect(excludeTrust(home, "claude:acme")).toBe(false);
+    expect(readConfig(home).ownTrust).toEqual(["claude:acme"]);
+    expect(listExclusions(home, "claude:acme")).toEqual({ items: [], mcp: [], trust: true });
+
+    env.write(".config/seats/claude/personal/.claude.json", {
+      ...json(personal),
+      projects: { "/mine": { hasTrustDialogAccepted: true } },
+    });
+    syncSeats(home);
+    expect(Object.keys(json(acme).projects)).toEqual(["/client"]);
+    expect(Object.keys(json(personal).projects)).toEqual(["/mine"]);
+    // MCP servers still reach it.
+    expect(json(acme).mcpServers.gmail).toBeDefined();
+
+    includeTrust(home, "claude:acme");
+    expect(readConfig(home).ownTrust).toBeUndefined();
+    syncSeats(home);
+    expect(Object.keys(json(acme).projects).sort()).toEqual(["/client", "/mine"]);
+    expect(() => includeTrust(home, "claude:acme")).toThrow("claude:acme already shares folder trust.");
+  });
+
+  test("only for tools that merge trust between seats", () => {
+    env = tempHome();
+    env.write(".config/seats/codex/work/auth.json", "{}");
+    env.write(".config/seats/codex/home/auth.json", "{}");
+    expect(() => excludeTrust(env.home, "codex:work")).toThrow(
+      "codex seats keep folder trust in a shared file. Per-seat trust works for: claude.",
+    );
   });
 });
 

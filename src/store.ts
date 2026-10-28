@@ -52,6 +52,8 @@ export type SeatsConfig = {
   autoContinue?: boolean;
   /** Shared items each seat keeps its own copy of, by seat id: `{ "claude:acme": ["CLAUDE.md"] }`. */
   exclude?: Record<string, string[]>;
+  /** Seats that keep their own folder trust and approvals (`seats exclude <id> trust`): they neither give nor get any. */
+  ownTrust?: string[];
 };
 
 export const configFile = (home: string) => join(seatsHome(home), "config.json");

@@ -5,6 +5,7 @@ import { exists } from "../helpers/seats.ts";
 import { claudeAccount } from "./account.ts";
 import { claudeFailover } from "./failover.ts";
 import { mergeClaudeConfigs } from "./merge.ts";
+import { claudeSessionHook } from "./session-hook.ts";
 import { claudeSessions } from "./sessions.ts";
 import { claudeUsage, readClaudeUsage } from "./usage.ts";
 
@@ -36,6 +37,7 @@ export const claudeSeats: SeatSource = {
   configDirEnv: "CLAUDE_CONFIG_DIR",
   sharedItems: SHARED_ITEMS,
   mergeSeats: mergeClaudeConfigs,
+  sessionHook: claudeSessionHook,
   // statusLine commands often point at a script inside the seat folder.
   pathFiles: ["settings.json"],
   // Downloaded copies that Claude Code can fetch again from the two plugin lists.

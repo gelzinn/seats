@@ -173,6 +173,7 @@ function fakeClaude(): string {
     `#!/bin/bash
 echo "$(basename "$CLAUDE_CONFIG_DIR")|$*|\${SEATS_LIMIT_MARKER:+marker}" >> "$FAKE_LOG"
 pwd > "$FAKE_DIR/launched-in"
+cat "$CLAUDE_CONFIG_DIR/.claude.json" > "$FAKE_DIR/config-at-launch" 2>/dev/null
 case "$FAKE_MODE:$(basename "$CLAUDE_CONFIG_DIR")" in
   limit:work|passing:work)
     touch "$FAKE_DIR/$FAKE_MODE-reported"
@@ -243,6 +244,28 @@ describe("supervise", () => {
     expect(code).toBe(0);
     expect(launches(log)).toEqual(["work|--resume s1|"]);
     expect(readFileSync(join(env.home, "launched-in"), "utf8").trim()).toBe(folder);
+  });
+
+  test("brings trust from the other seats into the seat before it starts", async () => {
+    fakeClaude();
+    env.write(".config/seats/claude/personal/.claude.json", {
+      projects: { "/repo": { hasTrustDialogAccepted: true } },
+    });
+    env.write(".config/seats/claude/work/.claude.json", { userID: "work" });
+    const work = seat("work");
+    const code = await supervise({
+      home: env.home,
+      source: claude,
+      seats: [work],
+      start: work,
+      args: [],
+      autoSwitch: false,
+    });
+    expect(code).toBe(0);
+    expect(JSON.parse(readFileSync(join(env.home, "config-at-launch"), "utf8"))).toMatchObject({
+      userID: "work",
+      projects: { "/repo": { hasTrustDialogAccepted: true } },
+    });
   });
 
   test("leaves the session alone on a passing 429", async () => {

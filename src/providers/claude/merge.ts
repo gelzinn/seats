@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeJsonAtomic } from "../../fs.ts";
+import type { MergeOptions } from "../../types.ts";
 
 /** Per-folder approvals kept in `.claude.json` under `projects[<path>]`. */
 const TRUST_FLAGS = ["hasTrustDialogAccepted", "hasClaudeMdExternalIncludesApproved"];
@@ -75,16 +76,26 @@ function readConfig(path: string): Json | undefined {
 
 /**
  * Merges folder trust, approvals and user MCP servers across every seat's
- * `.claude.json`. A seat never gets the servers `keptOut(dir)` names.
+ * `.claude.json`, writing only `targets`. A seat never gets the servers
+ * `keptOut(dir)` names, and a seat that keeps its own trust neither gives
+ * nor gets `projects`.
  */
-export function mergeClaudeConfigs(dirs: string[], keptOut: (dir: string) => string[] = () => []): string[] {
+export function mergeClaudeConfigs(
+  dirs: string[],
+  { keptOut = () => [], ownTrust = () => false, targets = dirs }: MergeOptions = {},
+): string[] {
   const configs = dirs
     .map((dir) => ({ dir, file: join(dir, ".claude.json"), data: readConfig(join(dir, ".claude.json")) }))
     .filter((item): item is { dir: string; file: string; data: Json } => item.data !== undefined);
+  // Only user MCP servers cross to or from a seat that keeps its own trust.
+  const serversOnly = (data: Json): Json => ({ mcpServers: data.mcpServers });
 
   const updated: string[] = [];
-  for (const config of configs) {
-    const others = configs.filter((other) => other !== config).map((other) => other.data);
+  for (const config of configs.filter((item) => targets.includes(item.dir))) {
+    const own = ownTrust(config.dir);
+    const others = configs
+      .filter((other) => other !== config)
+      .map((other) => (own || ownTrust(other.dir) ? serversOnly(other.data) : other.data));
     const merged = mergeClaudeState(config.data, others, keptOut(config.dir));
     if (!merged) continue;
     writeJsonAtomic(config.file, merged);

@@ -2,8 +2,21 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
-/** Env vars that would point seats, or a tool's config folder, outside the temp HOME. */
-const HOME_OVERRIDES = ["SEATS_HOME", "CODEX_HOME", "COPILOT_HOME", "GEMINI_CLI_HOME", "KIRO_HOME"];
+/**
+ * Env vars that would point seats, or a tool's config folder, outside the temp
+ * HOME, or reach a real herdr from a hook under test.
+ */
+const HOME_OVERRIDES = [
+  "SEATS_HOME",
+  "CODEX_HOME",
+  "COPILOT_HOME",
+  "GEMINI_CLI_HOME",
+  "KIRO_HOME",
+  "CLAUDE_CONFIG_DIR",
+  "HERDR_BIN_PATH",
+  "HERDR_SOCKET_PATH",
+  "HERDR_PANE_ID",
+];
 
 /** Throwaway HOME for tests. Clears the overrides above so every path resolves inside it. */
 export function tempHome(): { home: string; write: (path: string, data: unknown) => string; cleanup: () => void } {

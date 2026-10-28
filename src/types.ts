@@ -35,10 +35,19 @@ export type SeatSource = {
   /** Paths inside a seat folder that every seat of this source shares. */
   sharedItems?: string[];
   /**
-   * Merges per-seat state that can't be a shared file. Returns the files it
-   * rewrote. `keptOut(dir)` names the MCP servers that seat must not get.
+   * Merges per-seat state that can't be a shared file, reading every seat in
+   * `dirs` but writing only `options.targets`. Returns the files it rewrote.
    */
-  mergeSeats?: (dirs: string[], keptOut?: (dir: string) => string[]) => string[];
+  mergeSeats?: (dirs: string[], options?: MergeOptions) => string[];
+  /**
+   * Hooks the CLI runs by itself from the shared settings file `item`, so
+   * every session, plain `claude` too, reaches `command`. `add` returns the
+   * settings with them, or undefined when they're already there.
+   */
+  sessionHook?: {
+    item: string;
+    add: (settings: Record<string, unknown>, command: string) => Record<string, unknown> | undefined;
+  };
   /** Seat files that may hold absolute paths to the seat folder, rewritten by `seats migrate`. */
   pathFiles?: string[];
   /** Shared items that only hold on this machine (downloads, folder trust), left out of `seats export`. */
@@ -97,7 +106,19 @@ export type SeatSource = {
     list: (dir: string) => Session[];
     /** Args that reopen a session. */
     resumeArgs: (sessionId: string) => string[];
+    /** The transcript of session `sessionId` in seat folder `dir`, when the seat has it. Fast: reads no transcript. */
+    find?: (dir: string, sessionId: string) => string | undefined;
   };
+};
+
+/** What `SeatSource.mergeSeats` carries between seats, and where it writes. */
+export type MergeOptions = {
+  /** MCP servers that seat must not get. */
+  keptOut?: (dir: string) => string[];
+  /** True for a seat that keeps its own folder trust: it neither gives nor gets any. */
+  ownTrust?: (dir: string) => boolean;
+  /** Seats to write. Defaults to all of them. */
+  targets?: string[];
 };
 
 /** One conversation, read from the start and end of its transcript. */
