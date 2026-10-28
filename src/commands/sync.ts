@@ -3,13 +3,15 @@ import { join } from "node:path";
 import pc from "picocolors";
 import { readExclusions, seatFolders } from "../exclude.ts";
 import { isSymlink, lexists } from "../fs.ts";
+import { historyPlan, linkHistory } from "../history.ts";
 import { tidySharedHooks } from "../hook-paths.ts";
 import { type InstructionsReport, syncInstructions } from "../instructions.ts";
 import { type McpSyncReport, syncMcp } from "../mcp/library.ts";
+import { runningProcesses } from "../processes.ts";
 import { instructionsTargets, providers, seatSources, skillsTargets } from "../providers/index.ts";
 import { shareItems } from "../share.ts";
 import { type SkillsReport, syncSkills } from "../skills.ts";
-import { sharedDir } from "../store.ts";
+import { readConfig, sharedDir } from "../store.ts";
 import { addSessionHook, mergeOptions } from "../trust.ts";
 import { tilde } from "./ui.ts";
 
@@ -32,6 +34,7 @@ export type SyncReport = { linked: string[]; backups: string[]; merged: string[]
 export function syncSeats(home: string, only?: string[], { dryRun = false } = {}): SyncReport {
   const report: SyncReport = { linked: [], backups: [], merged: [], hooked: [], tidied: [] };
   const exclusions = readExclusions(home);
+  const config = readConfig(home);
 
   for (const source of seatSources) {
     if (!source.livePath || !source.sharedItems) continue;
@@ -55,6 +58,8 @@ export function syncSeats(home: string, only?: string[], { dryRun = false } = {}
       if (tidied) report.tidied.push(tidied);
       const hooked = addSessionHook(home, source, dirs, keep, { dryRun });
       if (hooked) report.hooked.push(hooked);
+      const history = historyPlan(home, source, config, folders);
+      if (history) report.linked.push(...linkHistory(history, { dryRun }).moved);
       continue;
     }
 
@@ -63,6 +68,13 @@ export function syncSeats(home: string, only?: string[], { dryRun = false } = {}
     report.backups.push(...shared.backups);
     const tidied = tidySharedHooks(home, source, dirs, keep);
     if (tidied) report.tidied.push(tidied);
+    // Conversations and memory, when `seats share` turned them on: a new seat or project joins in.
+    const history = historyPlan(home, source, config, folders);
+    if (history) {
+      const linked = linkHistory(history, { processes: runningProcesses });
+      report.linked.push(...linked.linked);
+      report.backups.push(...linked.backups);
+    }
     const hooked = addSessionHook(home, source, dirs, keep);
     if (hooked) report.hooked.push(hooked);
     if (!source.mergeSeats) continue;

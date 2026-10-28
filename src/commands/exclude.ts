@@ -5,6 +5,7 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { findSeatFolder, mcpKeptOut, readExclusions, readOwnTrust, type SeatFolder, seatIdOf } from "../exclude.ts";
 import { isSymlink, lexists, linkTarget, moveTree, replaceSymlink, writeJsonAtomic } from "../fs.ts";
+import { applyHistory, type HistoryKind, type HistoryOptions, type HistoryReport } from "../history.ts";
 import { libraryFile, readLibrary } from "../mcp/library.ts";
 import type { McpAdapter } from "../mcp/types.ts";
 import { mcpAdapters, providers, seatSources } from "../providers/index.ts";
@@ -13,21 +14,25 @@ import { realPath } from "../skills.ts";
 import { readConfig, sharedDir, writeConfig } from "../store.ts";
 import { fail, intro, tilde } from "./ui.ts";
 
-const USAGE = `Keep a shared item, an MCP server or folder trust out of one seat.
+const USAGE = `Keep a shared item, an MCP server, folder trust, memory or conversations out of one seat.
 
 Usage:
   seats exclude <seat-id>              List what the seat keeps out
   seats exclude <seat-id> <item>       Give the seat its own copy of a shared item
   seats exclude <seat-id> mcp <name>   Keep an MCP server out of the seat
   seats exclude <seat-id> trust        Neither give nor get folder trust and approvals
+  seats exclude <seat-id> memory       Keep its own memory, and so its own conversations
+  seats exclude <seat-id> sessions     Keep its own conversations
   seats include <seat-id> <item>       Link the seat to the shared copy again
   seats include <seat-id> mcp <name>   Let sync add the server back
   seats include <seat-id> trust        Share folder trust again
+  seats include <seat-id> memory       Share memory again (sessions: conversations)
 
 Examples:
   seats exclude claude:acme CLAUDE.md
   seats exclude claude:acme mcp gmail
   seats exclude claude:acme trust
+  seats exclude claude:acme sessions
   seats include claude:acme CLAUDE.md`;
 
 const lower = (name: string) => name.toLowerCase();
@@ -204,8 +209,64 @@ export function includeTrust(home: string, id: string): void {
   );
 }
 
-/** What seat `id` keeps out: its own copies of shared items, MCP servers, and whether its trust is its own. */
-export function listExclusions(home: string, id: string): { items: string[]; mcp: string[]; trust: boolean } {
+const ownKey = (kind: HistoryKind) => (kind === "memory" ? "ownMemory" : "ownSessions");
+const isHistory = (item: string | undefined): item is HistoryKind => item === "memory" || item === "sessions";
+const kindName = (kind: HistoryKind) => (kind === "memory" ? "memory" : "conversations");
+
+/** The seat for `id`, after checking its tool keeps conversations and memory seats can share. */
+function historySeat(home: string, id: string): SeatFolder {
+  const seat = findSeatFolder(home, id);
+  if (seat.source.history) return seat;
+  const tools = seatSources.filter((source) => source.history).map((source) => source.id);
+  throw new Error(`seats doesn't share ${seat.source.id} history. It does for: ${tools.join(", ")}.`);
+}
+
+/**
+ * Makes seat `id` keep its own memory or conversations. While they're shared,
+ * the seat gets a real copy of what it saw, so nothing it had goes missing.
+ * Own memory means own conversations too: memory lives in their folders.
+ * Returns undefined when the seat already keeps its own.
+ */
+export function excludeHistory(
+  home: string,
+  id: string,
+  kind: HistoryKind,
+  options: HistoryOptions = {},
+): HistoryReport | undefined {
+  historySeat(home, id);
+  const config = readConfig(home);
+  const current = config[ownKey(kind)] ?? [];
+  if (current.includes(id)) return undefined;
+  return applyHistory(home, { ...config, [ownKey(kind)]: [...current, id] }, options);
+}
+
+/**
+ * Shares memory or conversations with seat `id` again. While they're shared,
+ * its own copy moves aside as `*.seats-backup` instead of being merged, since
+ * it may hold what must not reach the other seats.
+ */
+export function includeHistory(
+  home: string,
+  id: string,
+  kind: HistoryKind,
+  options: HistoryOptions = {},
+): HistoryReport {
+  historySeat(home, id);
+  const config = readConfig(home);
+  const current = config[ownKey(kind)] ?? [];
+  if (!current.includes(id)) throw new Error(`${id} already shares its ${kindName(kind)}.`);
+  const rest = current.filter((item) => item !== id);
+  return applyHistory(
+    home,
+    { ...config, [ownKey(kind)]: rest.length > 0 ? rest : undefined },
+    { ...options, aside: id },
+  );
+}
+
+type Exclusions = { items: string[]; mcp: string[]; trust: boolean; memory: boolean; sessions: boolean };
+
+/** What seat `id` keeps out: its own copies of shared items, MCP servers, and whether its trust, memory or conversations are its own. */
+export function listExclusions(home: string, id: string): Exclusions {
   findSeatFolder(home, id);
   let library = {};
   try {
@@ -217,7 +278,13 @@ export function listExclusions(home: string, id: string): { items: string[]; mcp
     items: readExclusions(home)[id] ?? [],
     mcp: mcpKeptOut(library, id),
     trust: readOwnTrust(home).includes(id),
+    memory: readConfig(home).ownMemory?.includes(id) ?? false,
+    sessions: readConfig(home).ownSessions?.includes(id) ?? false,
   };
+}
+
+function printCopies(report: HistoryReport): void {
+  for (const path of report.copied) p.log.step(`Copied ${tilde(path)}`);
 }
 
 function run<T>(step: () => T): T {
@@ -229,14 +296,16 @@ function run<T>(step: () => T): T {
 }
 
 function printList(home: string, id: string): void {
-  const { items, mcp, trust } = run(() => listExclusions(home, id));
-  if (items.length === 0 && mcp.length === 0 && !trust) {
+  const { items, mcp, trust, memory, sessions } = run(() => listExclusions(home, id));
+  if (items.length === 0 && mcp.length === 0 && !trust && !memory && !sessions) {
     p.outro(`${id} shares everything.`);
     return;
   }
   for (const item of items) p.log.step(`${item}  ${pc.dim("own copy")}`);
   for (const name of mcp) p.log.step(`mcp ${name}  ${pc.dim("kept out")}`);
   if (trust) p.log.step(`trust  ${pc.dim("own folder trust and approvals")}`);
+  if (memory) p.log.step(`memory  ${pc.dim("own memory and conversations")}`);
+  if (sessions) p.log.step(`sessions  ${pc.dim("own conversations")}`);
   p.outro(
     `Undo with ${pc.cyan(`seats include ${id} <item>`)}, ${pc.cyan(`seats include ${id} mcp <name>`)} or ${pc.cyan(`seats include ${id} trust`)}.`,
   );
@@ -265,6 +334,19 @@ export async function excludeCommand(args: string[]): Promise<void> {
     return p.outro(`${id} keeps its own folder trust and approvals. It neither gives nor gets any from now on.`);
   }
 
+  if (isHistory(item)) {
+    const report = run(() => excludeHistory(home, id, item));
+    if (!report) return p.outro(`${id} already keeps its own ${kindName(item)}.`);
+    const also = item === "memory" ? " and conversations" : "";
+    const kept = `${id} keeps its own ${kindName(item)}${also} from now on.`;
+    if (report.copied.length === 0) return p.outro(kept);
+    printCopies(report);
+    // Which of them were the seat's own can't be told apart any more.
+    return p.outro(
+      `${kept}\n${pc.yellow("It holds a copy of everything it could see until now, the other seats' too. Delete what isn't its own from the paths above.")}`,
+    );
+  }
+
   const result = run(() => excludeItem(home, id, item));
   if (result.status === "already")
     return p.outro(`${id} already keeps its own ${item}.\n${pc.dim(tilde(result.path))}`);
@@ -289,6 +371,16 @@ export async function includeCommand(args: string[]): Promise<void> {
   if (item === "trust") {
     run(() => includeTrust(home, id));
     return p.outro(`${id} shares folder trust again, from the next seats sync or launch.`);
+  }
+
+  if (isHistory(item)) {
+    const report = run(() => includeHistory(home, id, item));
+    for (const path of report.aside) p.log.step(`Its own copy is in ${tilde(path)}`);
+    return p.outro(
+      report.linked.length > 0
+        ? `${id} shares ${kindName(item)} again.`
+        : `${id} shares ${kindName(item)} again once seats share ${item === "memory" ? "memory" : "sessions"} is on.`,
+    );
   }
 
   const result = run(() => includeItem(home, id, item));

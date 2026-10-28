@@ -1,7 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { reportHerdrResume, resumableInHerdr } from "../src/herdr.ts";
+import type { RunningProcess } from "../src/processes.ts";
 import { tempHome } from "./helpers/temp-home.ts";
 
 let env: ReturnType<typeof tempHome>;
@@ -9,8 +19,9 @@ beforeEach(() => (env = tempHome()));
 afterEach(() => env.cleanup());
 
 /**
- * A fake `herdr`: `pane get` answers with `pane.json`, `report-agent-session`
- * logs its argv, one line per call, or is refused while `refuse` exists.
+ * A fake `herdr`: `pane get` answers with `pane.json`, `pane process-info`
+ * with `process.json` (fails without it) and counts in `asked.log`, `report-agent-session` logs its
+ * argv, one line per call, or is refused while `refuse` exists.
  */
 function fakeHerdr(): { bin: string; log: string } {
   const bin = env.write(
@@ -18,6 +29,7 @@ function fakeHerdr(): { bin: string; log: string } {
     `#!/bin/bash
 case "$1 $2" in
   "pane get") cat "$FAKE_DIR/pane.json" ;;
+  "pane process-info") echo >> "$FAKE_DIR/asked.log"; cat "$FAKE_DIR/process.json" 2>/dev/null || exit 1 ;;
   "pane report-agent-session")
     if [ -e "$FAKE_DIR/refuse" ]; then echo '{"error":{"code":"resume_not_accepted"}}' >&2; exit 1; fi
     echo "$*" >> "$FAKE_DIR/reports.log" ;;
@@ -44,19 +56,41 @@ function transcript(slug: string, id: string, mtime: number): void {
   utimesSync(file, mtime, mtime);
 }
 
+/** What `pane process-info` says runs in the pane: `[pid, argv]` pairs. */
+function foreground(...processes: [number, string[]][]): void {
+  const list = processes.map(([pid, argv]) => ({ pid, name: argv[0], argv, cmdline: argv.join(" "), cwd: "/repo" }));
+  const info = { pane_id: "w1:p2", foreground_processes: list };
+  env.write("process.json", { id: "cli:pane:process-info", result: { type: "pane_process_info", process_info: info } });
+}
+
+/** The processes the hook can read the env of, by pid. */
+let running: RunningProcess[] = [];
+beforeEach(() => (running = []));
+const seatDir = (slug: string) => join(env.home, ".config/seats/claude", slug);
+/** How many times the hook asked herdr which processes run in the pane. */
+const asked = () => {
+  const file = join(env.home, "asked.log");
+  return existsSync(file) ? readFileSync(file, "utf8").length : 0;
+};
+
 /** Runs the hook as herdr would on `event` for pane `w1:p2`, and returns the reports so far. */
 function hook(bin: string, log: string, event = "pane.agent_status_changed"): string[] {
-  reportHerdrResume(env.home, {
-    PATH: process.env.PATH,
-    FAKE_DIR: env.home,
-    HERDR_BIN_PATH: bin,
-    HERDR_PLUGIN_EVENT: event,
-    HERDR_PLUGIN_EVENT_JSON: JSON.stringify({
-      event: event.replace(".", "_"),
-      data: { type: event.replace(".", "_"), pane_id: "w1:p2", agent_status: "working" },
-    }),
-    HERDR_PLUGIN_STATE_DIR: join(env.home, "state"),
-  });
+  const processes = (pids: number[]) => running.filter((item) => pids.includes(item.pid));
+  reportHerdrResume(
+    env.home,
+    {
+      PATH: process.env.PATH,
+      FAKE_DIR: env.home,
+      HERDR_BIN_PATH: bin,
+      HERDR_PLUGIN_EVENT: event,
+      HERDR_PLUGIN_EVENT_JSON: JSON.stringify({
+        event: event.replace(".", "_"),
+        data: { type: event.replace(".", "_"), pane_id: "w1:p2", agent_status: "working" },
+      }),
+      HERDR_PLUGIN_STATE_DIR: join(env.home, "state"),
+    },
+    processes,
+  );
   return existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : [];
 }
 
@@ -99,6 +133,85 @@ describe("seats hook herdr", () => {
     transcript("personal", "s1", 2_000);
     pane("claude", "s1");
     expect(hook(bin, log)).toEqual([report("personal", "s1")]);
+  });
+
+  test("with shared conversations, every seat has it: the seat the pane's claude runs on wins", () => {
+    const { bin, log } = fakeHerdr();
+    env.write(".config/seats/shared/claude/projects/-repo/s1.jsonl", '{"type":"user"}\n');
+    for (const slug of ["personal", "work"]) {
+      mkdirSync(seatDir(slug), { recursive: true });
+      symlinkSync(join(env.home, ".config/seats/shared/claude/projects"), join(seatDir(slug), "projects"));
+    }
+    pane("claude", "s1");
+    foreground([7, ["claude", "--resume", "s1"]]);
+    running = [{ pid: 7, argv: ["claude"], env: { CLAUDE_CONFIG_DIR: seatDir("work") } }];
+    expect(hook(bin, log)).toEqual([report("work", "s1")]);
+    expect(asked()).toBe(1);
+    // An auto-switch: a new claude on another seat, which herdr detects.
+    foreground([8, ["claude", "--resume", "s1"]]);
+    running = [{ pid: 8, argv: ["claude"], env: { CLAUDE_CONFIG_DIR: seatDir("personal") } }];
+    expect(hook(bin, log, "pane.agent_detected")).toEqual([report("work", "s1"), report("personal", "s1")]);
+    expect(asked()).toBe(2);
+  });
+
+  test("status changes keep to one pane get: the seat found on detection is reused", () => {
+    const { bin, log } = fakeHerdr();
+    transcript("work", "s1", 1_000);
+    transcript("personal", "s1", 2_000);
+    transcript("work", "s2", 1_000);
+    transcript("personal", "s2", 2_000);
+    pane("claude", "s1");
+    foreground([7, ["claude"]]);
+    running = [{ pid: 7, argv: ["claude"], env: { CLAUDE_CONFIG_DIR: seatDir("work") } }];
+    expect(hook(bin, log, "pane.agent_detected")).toEqual([report("work", "s1")]);
+    // The search once more after a detection, then settled: neither asks herdr again.
+    expect(hook(bin, log)).toHaveLength(1);
+    expect(hook(bin, log)).toHaveLength(1);
+    // A new conversation in the same claude (/clear): same seat, still not asked.
+    pane("claude", "s2");
+    expect(hook(bin, log)).toEqual([report("work", "s1"), report("work", "s2")]);
+    expect(asked()).toBe(1);
+    expect(JSON.parse(readFileSync(join(env.home, "state/reported.json"), "utf8"))["w1:p2"]).toEqual({
+      session: "claude:s2",
+      command: "seats run claude:work --resume s2",
+      seat: "claude:work",
+    });
+  });
+
+  test("after an auto-switch, the seat of the claude child wins over the one seats run started on", () => {
+    const { bin, log } = fakeHerdr();
+    transcript("work", "s1", 2_000);
+    transcript("personal", "s1", 2_000);
+    pane("claude", "s1");
+    foreground([6, ["seats", "run", "claude:work", "--resume", "s1"]], [7, ["claude", "--resume", "s1"]]);
+    running = [{ pid: 7, argv: ["claude"], env: { CLAUDE_CONFIG_DIR: seatDir("personal") } }];
+    expect(hook(bin, log, "pane.agent_detected")).toEqual([report("personal", "s1")]);
+    // The child's env can't be read: the seat seats run started on.
+    running = [];
+    expect(hook(bin, log, "pane.agent_detected")).toEqual([report("personal", "s1"), report("work", "s1")]);
+  });
+
+  test("a claude without a config dir runs on the active seat", () => {
+    const { bin, log } = fakeHerdr();
+    transcript("work", "s1", 1_000);
+    transcript("personal", "s1", 2_000);
+    symlinkSync(".config/seats/claude/work", join(env.home, ".claude"));
+    pane("claude", "s1");
+    foreground([7, ["claude"]]);
+    running = [{ pid: 7, argv: ["claude"], env: {} }];
+    expect(hook(bin, log)).toEqual([report("work", "s1")]);
+  });
+
+  test("falls back to the newest copy when process-info fails or the pane's seat lacks the session", () => {
+    const { bin, log } = fakeHerdr();
+    transcript("work", "s1", 1_000);
+    transcript("personal", "s1", 2_000);
+    env.write(".config/seats/claude/other/.claude.json", "{}");
+    pane("claude", "s1");
+    expect(hook(bin, log)).toEqual([report("personal", "s1")]);
+    foreground([7, ["claude"]]);
+    running = [{ pid: 7, argv: ["claude"], env: { CLAUDE_CONFIG_DIR: seatDir("other") } }];
+    expect(hook(bin, log, "pane.agent_detected")).toEqual([report("personal", "s1"), report("personal", "s1")]);
   });
 
   test("reports nothing for another agent, a pane without a session, or a session no seat has", () => {

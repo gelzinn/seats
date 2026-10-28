@@ -14,6 +14,7 @@ import { migrateCommand } from "./commands/migrate.ts";
 import { pinCommand, unpinCommand } from "./commands/pin.ts";
 import { autoSwitchCommand, hookCommand, runCommand } from "./commands/run.ts";
 import { moveCommand, sessionsCommand } from "./commands/sessions.ts";
+import { shareCommand } from "./commands/share.ts";
 import { pickCommand, useCommand } from "./commands/switch.ts";
 import { syncCommand } from "./commands/sync.ts";
 import { usageCommand } from "./commands/usage.ts";
@@ -66,11 +67,15 @@ Usage:
                         run through one seat at the shared copy (--dry-run to preview)
   seats doctor          Check the session hook, seats on PATH, the herdr plugin
                         and integrations, and Paseo's plugin path, with a fix for each
-  seats exclude <id> [<item> | mcp <name> | trust]
-                        Keep a shared item (CLAUDE.md, skills…), an MCP server
-                        or folder trust out of one seat; with no item, list
-                        what it keeps out
-  seats include <id> <item> | mcp <name> | trust
+  seats share memory|sessions on|off|status
+                        Off by default. Give every Claude seat the same
+                        per-project memory, or the same conversations (resume,
+                        rewind) and memory with them (--dry-run to preview)
+  seats exclude <id> [<item> | mcp <name> | trust | memory | sessions]
+                        Keep a shared item (CLAUDE.md, skills…), an MCP server,
+                        folder trust, memory or conversations out of one seat;
+                        with no item, list what it keeps out
+  seats include <id> <item> | mcp <name> | trust | memory | sessions
                         Share it with that seat again
   seats install mcp <name> -- <command> [args...] [--env KEY=VALUE ...]
   seats install mcp <name> --url <url> [--header "Key: Value" ...] [--sse]
@@ -117,6 +122,8 @@ Examples:
   seats exclude claude:acme CLAUDE.md
   seats exclude claude:acme mcp gmail
   seats exclude claude:acme trust
+  seats share sessions on --dry-run
+  seats exclude claude:acme sessions
   seats rename claude:primary work
   seats remove claude:old
   seats install mcp docs -- npx -y docs-mcp
@@ -158,6 +165,7 @@ const commands: Record<string, (args: string[]) => Promise<void>> = {
   rename: renameCommand,
   run: runCommand,
   sessions: sessionsCommand,
+  share: shareCommand,
   sync: syncCommand,
   uninstall: uninstallCommand,
   unpin: unpinCommand,

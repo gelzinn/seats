@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
-import { isInside, lexists, linkTarget, moveTree } from "../fs.ts";
+import { isInside, isSymlink, lexists, linkTarget, moveTree } from "../fs.ts";
 import { discoverSeatDirs } from "../home-dirs.ts";
 import { processesUsing, type RunningProcess, runningProcesses } from "../processes.ts";
 import { seatSources } from "../providers/index.ts";
@@ -217,8 +217,13 @@ export async function removeCommand(args: string[]): Promise<void> {
 
   if (!yes) {
     if (!process.stdin.isTTY) fail("Pass --yes to remove a seat without being asked.");
+    const projects = seat.source.history?.projects;
+    const shared = projects !== undefined && isSymlink(join(seat.dir, projects));
+    const goes = shared
+      ? "Its login goes with it; shared conversations stay."
+      : "Its login, sessions and history go with it.";
     const sure = await p.confirm({
-      message: `Delete ${tilde(seat.dir)}? Its login, sessions and history go with it.`,
+      message: `Delete ${tilde(seat.dir)}? ${goes}`,
       initialValue: false,
     });
     cancelIfNeeded(sure);
