@@ -31,6 +31,28 @@ function transcript(slug: string, id: string, cwd: string, title: string, minute
   return file;
 }
 
+const codexSeat = (slug: string): Seat => ({
+  id: `codex:${slug}`,
+  source: "codex",
+  provider: "codex",
+  kind: "cli",
+  label: slug,
+  dir: join(env.home, ".config/seats/codex", slug),
+  signedIn: true,
+});
+
+/** A Codex rollout in `slug`'s seat, as `codex` writes it from the terminal. */
+function codexRollout(slug: string, id: string, prompt: string): string {
+  const lines = [
+    { type: "session_meta", payload: { id, cwd: "/p/one", source: "cli" } },
+    { type: "event_msg", payload: { type: "user_message", message: prompt } },
+  ];
+  return env.write(
+    `.config/seats/codex/${slug}/sessions/2026/10/15/rollout-2026-10-15T19-25-01-${id}.jsonl`,
+    lines.map((line) => JSON.stringify(line)).join("\n"),
+  );
+}
+
 describe("listSessions", () => {
   test("lists every seat's conversations, newest first", () => {
     transcript("work", "aaaa1111", "/p/one", "oldest", 30);
@@ -61,13 +83,13 @@ describe("sessionSeats", () => {
     expect((await sessionSeats(env.home)).map((item) => [item.id, item.signedIn])).toEqual([["claude:old", false]]);
   });
 
-  test("leaves Codex out, even with a conversation: seats only finds those for herdr", async () => {
+  test("includes Codex seats, whose conversations are listed too", async () => {
     env.write(".config/seats/claude/old/.claude.json", "{}");
     env.write(".config/seats/codex/work/auth.json", "{}");
-    env.write(".config/seats/codex/work/sessions/2026/10/15/rollout-2026-10-15T19-25-01-c1.jsonl", "{}\n");
+    codexRollout("work", "019a0000-0000-7000-8000-0000000000c1", "codex prompt");
     const seats = await sessionSeats(env.home);
-    expect(seats.map((item) => item.id)).toEqual(["claude:old"]);
-    expect(listSessions(seats)).toEqual([]);
+    expect(seats.map((item) => item.id).sort()).toEqual(["claude:old", "codex:work"]);
+    expect(listSessions(seats).map((item) => [item.seat.id, item.title])).toEqual([["codex:work", "codex prompt"]]);
   });
 });
 
@@ -101,6 +123,16 @@ describe("moveSession", () => {
     expect(readFileSync(theirs, "utf8")).toContain("older");
     moveSession(listSessions(seats), "aaaa", seat("personal"), { force: true });
     expect(readFileSync(theirs, "utf8")).toContain("newer");
+  });
+
+  test("refuses to copy a Codex conversation, saying why, and refuses another tool's seat first", () => {
+    const file = codexRollout("work", "019a0000-0000-7000-8000-0000000000c1", "codex prompt");
+    const seats = [codexSeat("work"), codexSeat("personal"), seat("work")];
+    expect(() => moveSession(listSessions(seats), "019a", codexSeat("personal"))).toThrow(/encrypted for the account/);
+    expect(existsSync(file.replace("/work/", "/personal/"))).toBe(false);
+    expect(() => moveSession(listSessions(seats), "019a", seat("work"))).toThrow(
+      /is a codex conversation; claude:work isn't/,
+    );
   });
 
   test("refuses to move a conversation to the seat it's on", () => {

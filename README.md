@@ -83,7 +83,7 @@ seats auto-switch on     # off by default: move to the next seat when one hits i
 seats use api:openrouter
 seats health             # ask every seat to reply and see which ones work
 seats usage              # every seat's 5-hour and weekly usage, without sending a prompt
-seats sessions           # conversations in this folder, from every Claude seat
+seats sessions           # conversations in this folder, from every Claude and Codex seat
 seats move 3f2a claude:work   # copy one to another seat and pick it up there
 seats add claude work    # sign a new account in, without touching the active one
 seats desktop open work  # Claude Desktop on another account, beside the ones already open
@@ -228,7 +228,7 @@ Things to know:
 
 ## Continue a conversation on another seat
 
-Each seat keeps its own history, so `claude --resume` on one account doesn't show what you were doing on another. `seats sessions` lists conversations from every Claude seat, newest first:
+Each seat keeps its own history, so `claude --resume` on one account doesn't show what you were doing on another. `seats sessions` lists conversations from every Claude and Codex seat, newest first:
 
 ```text
 ┌─────────────────┬────────┬────────────┬───────────────────────────────┬──────────┐
@@ -239,8 +239,9 @@ Each seat keeps its own history, so `claude --resume` on one account doesn't sho
 └─────────────────┴────────┴────────────┴───────────────────────────────┴──────────┘
 ```
 
-- It shows the conversations of the folder you're in, the same ones `claude --resume` would list there. Add `--all` for every project. Pass a seat id to see one seat: `seats sessions claude:work`.
+- It shows the conversations of the folder you're in, the same ones `claude --resume` would list there. Add `--all` for every project. Pass a tool or seat id to see fewer: `seats sessions codex`, `seats sessions claude:work`.
 - The title is the name you gave the conversation, or Claude's own title, or else your first message. Only the start and end of each transcript are read, so long conversations stay fast to list.
+- Codex conversations are the ones `codex resume` lists: archived ones, `codex exec` runs and subagents stay out. Their Id column shows the whole id, which is what `codex resume` takes.
 - The 20 newest are shown, with a note when there are more.
 
 `seats move <id> <seat>` copies a conversation to another seat. The first characters of the id are enough; if they fit more than one conversation, seats lists them so you can type more.
@@ -254,7 +255,7 @@ seats move 3f2a claude:work --force   # replace a copy the seat already has
 - The transcript and its folder land at the same place inside the other seat, so `claude --resume` finds it there.
 - A seat that already has that conversation keeps its copy unless you add `--force`. Moving a conversation to the seat it's on is an error.
 - Afterwards seats prints the command that continues it, and in a terminal it asks "Open it now on claude:work?". Yes opens it on that seat with `claude --resume`, from the folder the conversation ran in. Your active seat doesn't change, and auto-switch stays out of this launch, so it opens on the seat you named.
-- Codex isn't supported yet: it isn't confirmed that copying its session file is enough for `codex resume` on another account.
+- Codex conversations are listed but not moved. Codex would find the copy (`codex resume <id>` looks up the file by name), but a conversation keeps the reasoning Codex encrypted for the account that ran it, and the API can refuse it from another account. Reopen one on its own seat with `seats run codex:work resume <id>`.
 
 ## One folder for every seat
 
@@ -477,7 +478,7 @@ seatEnv("claude", "work"); // { CLAUDE_CONFIG_DIR: "/home/you/.config/seats/clau
 
 **Paseo.** [`plugins/paseo`](plugins/paseo) is a Paseo plugin that sets `CLAUDE_CONFIG_DIR` from seats whenever a `claude-<seat>` provider opens a session. Keep the provider's `env` in Paseo's `config.json` too, because provider diagnostics and model listing don't go through the plugin. Paseo only loads modules from inside the plugin folder, so the plugin installs seats as a copy (`install-links`). After changing the library, run `bun run build` here and `npm install` in `plugins/paseo`, then reload the plugin. `seats install plugin paseo` prints the config to add. It used to live in `integrations/paseo`: if you linked Paseo to that path, point it at `plugins/paseo` instead (`seats doctor` notices).
 
-**herdr.** [`plugins/herdr`](plugins/herdr) makes [herdr](https://herdr.dev) reopen each Claude Code and Codex pane on the seat its conversation ran on. On its own, herdr restores those panes after a restart with `claude --resume <id>` or `codex resume <id>`, which open the active seat. The plugin runs `seats hook herdr` when herdr detects Claude Code or Codex in a pane or the pane's status changes, finds the seat that has the conversation (the most recently written copy, when several have it) and reports `seats run claude:<seat> --resume <id>` or `seats run codex:<seat> resume <id>` to herdr, which then uses it over its own. Codex conversations are only found by file name, never listed or copied, so `seats sessions` and `seats move` stay Claude-only. Needs herdr 0.9.2 or later, its integration for each tool (`herdr integration install claude`, `herdr integration install codex`) and `seats` on your `PATH`:
+**herdr.** [`plugins/herdr`](plugins/herdr) makes [herdr](https://herdr.dev) reopen each Claude Code and Codex pane on the seat its conversation ran on. On its own, herdr restores those panes after a restart with `claude --resume <id>` or `codex resume <id>`, which open the active seat. The plugin runs `seats hook herdr` when herdr detects Claude Code or Codex in a pane or the pane's status changes, finds the seat that has the conversation (the most recently written copy, when several have it) and reports `seats run claude:<seat> --resume <id>` or `seats run codex:<seat> resume <id>` to herdr, which then uses it over its own. Codex conversations are found by file name. Needs herdr 0.9.2 or later, its integration for each tool (`herdr integration install claude`, `herdr integration install codex`) and `seats` on your `PATH`:
 
 ```bash
 seats install plugin herdr     # --dry-run prints the herdr command
