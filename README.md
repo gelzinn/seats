@@ -257,6 +257,35 @@ seats move 3f2a claude:work --force   # replace a copy the seat already has
 - Afterwards seats prints the command that continues it, and in a terminal it asks "Open it now on claude:work?". Yes opens it on that seat with `claude --resume`, from the folder the conversation ran in. Your active seat doesn't change, and auto-switch stays out of this launch, so it opens on the seat you named.
 - Codex conversations are listed but not moved. Codex would find the copy (`codex resume <id>` looks up the file by name), but a conversation keeps the reasoning Codex encrypted for the account that ran it, and the API can refuse it from another account. Reopen one on its own seat with `seats run codex:work resume <id>`.
 
+To have every conversation on every seat without moving them one by one, [share them](#share-memory-and-conversations-between-seats).
+
+## Share memory and conversations between seats
+
+Each Claude seat keeps its own conversations and its own [auto memory](https://code.claude.com/docs/en/memory), so what Claude learned about a project on one account doesn't exist on the others. Two switches change that. Both are off until you turn them on, and each has a dry run:
+
+```bash
+seats share                           # what is shared now
+seats share memory on --dry-run       # list what would move, link and be backed up
+seats share memory on                 # every seat sees the same memory
+seats share sessions on               # every seat sees the same conversations, memory with them
+seats share sessions off              # each seat gets a real copy back
+```
+
+- **Memory** is `projects/<project>/memory/` in each seat. Claude Code names that folder after the git repository (its main checkout, so worktrees and subfolders share one), else after the folder you started in. With `seats share memory on`, each project's memory moves to `~/.config/seats/shared/claude/projects/<project>/memory` and every seat links to it. Conversations stay per seat.
+- **Conversations** are `projects/` (transcripts, with subagents and tool output), `file-history/` (the checkpoints `/rewind` uses), `plans/` and, for older versions, `todos/`. With `seats share sessions on` they move to `~/.config/seats/shared/claude/` and every seat links to them, so `claude --resume` and `/rewind` work from any account. Memory lives inside `projects/`, so it comes along whether or not memory sharing is on. The prompt history behind the up arrow (`history.jsonl`) stays per seat.
+- **The first time**, every seat's copy is merged file by file. The same conversation in several seats, left there by `seats move` or auto-switch, keeps its newest transcript, and so does a memory file that differs. Every older copy is kept as `*.seats-backup`; nothing is deleted.
+- **New seats and projects** join by themselves: `seats sync` and switching link a seat added later, and the session hook (`seats hook session`, see [How merging works](#shared-config-between-seats)) links a project's memory as a session opens there, and after each turn picks up memory a seat wrote on its own.
+- **Off** replaces each link with a real copy of what the seat saw, so nothing goes missing. The shared copy stays where it was; delete it yourself once you've checked the seats. Turning memory off while conversations are shared leaves memory shared between the seats that share conversations.
+- **Running sessions.** Moving conversations under a running `claude` would split its transcript, so `seats share sessions on|off` (and `exclude`/`include ... sessions`) refuses while Claude runs on a seat whose conversations would move. Memory can be turned on or off at any time.
+
+Things to know before turning conversations on:
+
+- **Privacy.** Every account that shares sees every conversation and memory of every other, client work included. Keep a seat out first with `seats exclude claude:acme sessions` (or `memory`, which keeps out both); `seats share` and `seats share ... on` name the seats that share.
+- **One conversation, two seats.** Resuming the same conversation on two seats at once writes to the same transcript, just as two terminals on one seat do today. Keep each conversation open in one place.
+- **Cleanup.** Claude Code deletes conversations older than `cleanupPeriodDays` (from the shared `settings.json`). With shared conversations, any seat's cleanup prunes them for every seat.
+- **Auto memory elsewhere.** If you set `autoMemoryDirectory` in `settings.json`, Claude keeps memory there instead, and `seats share memory` has nothing to share.
+- `seats sessions` lists a shared conversation once, with "shared" in the Seat column, and `seats move` to a seat that already sees it says so. `seats export` leaves conversations and memory out. `seats remove` deletes the seat's links, never the shared copy.
+
 ## One folder for every seat
 
 ```text
@@ -315,7 +344,7 @@ When a tool has two or more seats, activating one of them, or running `seats syn
 
 | Tool | Shared between seats | Stays per account |
 | --- | --- | --- |
-| **Claude** | See the table below | `.credentials.json`, sessions, history |
+| **Claude** | See the table below | `.credentials.json`, sessions, history (unless [shared](#share-memory-and-conversations-between-seats)) |
 | **Codex** | `config.toml` (MCP servers and trusted projects), `AGENTS.md`, `agents/`, `skills/`, `rules/`, `prompts/`, `hooks.json` | `auth.json`, sessions, history |
 | **Gemini** | `settings.json`, `GEMINI.md`, `trustedFolders.json`, `skills/`, `commands/`, `extensions/` | `oauth_creds.json`, `google_accounts.json` |
 | **Copilot** | `settings.json`, `mcp-config.json`, `copilot-instructions.md`, `instructions/`, `agents/`, `skills/`, `hooks/` | `config.json`, MCP OAuth and secrets |
@@ -328,7 +357,7 @@ When a tool has two or more seats, activating one of them, or running `seats syn
 | Shared across seats | Stays per account |
 | --- | --- |
 | `settings.json`, `CLAUDE.md`, `keybindings.json`, `statusline-command.sh` | Login (`.credentials.json`) and `oauthAccount` |
-| `agents/`, `commands/`, `skills/`, `hooks/`, `output-styles/`, `themes/` | Sessions, history and transcripts |
+| `agents/`, `commands/`, `skills/`, `hooks/`, `output-styles/`, `themes/` | Sessions, history, transcripts and memory, unless you [share them](#share-memory-and-conversations-between-seats) |
 | Installed plugins, marketplaces and plugin cache | Org-synced plugins (`plugins/synced`) and policy limits |
 | User MCP servers (`mcpServers` in `.claude.json`) | MCP OAuth tokens, so each account authenticates once |
 | Folder trust, approved tools and approved `.mcp.json` servers | Usage stats and onboarding state |
@@ -354,6 +383,8 @@ Every seat of a tool gets the same CLAUDE.md, skills, MCP servers and folder tru
 seats exclude claude:acme CLAUDE.md   # this seat gets its own CLAUDE.md
 seats exclude claude:acme mcp gmail   # and no gmail MCP server
 seats exclude claude:acme trust       # and its own folder trust
+seats exclude claude:acme sessions    # and its own conversations
+seats exclude claude:acme memory      # and its own memory, so its own conversations too
 seats exclude claude:acme             # list what it keeps out
 seats include claude:acme CLAUDE.md   # share it again
 seats include claude:acme mcp gmail
@@ -363,6 +394,7 @@ seats include claude:acme trust
 - **A shared item** (any name from the table above, like `CLAUDE.md`, `skills` or `settings.json`) stops being a link. The seat gets a copy of the shared one, so nothing changes until you edit it; seats prints its path. From then on `seats sync`, switching seats and the sync across tools leave that copy alone, even while the seat is active. The choice is saved in `~/.config/seats/config.json`.
 - **An MCP server** is removed from that seat's `.claude.json`, and the seat id is added to the server's `skip` in `mcp.json` (`"skip": ["claude:acme"]`). Merging seats, `seats sync` and `seats install mcp` then never write it into that seat. This works for Claude seats, which keep their own MCP servers.
 - **Folder trust** (`trust`) covers the whole per-folder half of `.claude.json`: trusted folders, approved tools and approved `.mcp.json` servers. A seat that keeps its own neither gives any to the other seats nor gets theirs, on sync, on launch or from the session hook. What it already got stays. User MCP servers still follow the rules above. This works for Claude seats; other tools keep trust in a shared file, so exclude that file instead (Codex's `config.toml`, Gemini's `trustedFolders.json`).
+- **Memory and conversations** (`memory`, `sessions`), when [shared](#share-memory-and-conversations-between-seats), stop reaching that seat: it gets a real copy of what it saw, then keeps its own. Excluded before you turn sharing on, nothing of the seat ever moves. `memory` keeps out conversations too, since memory lives in their folders; `sessions` alone still lets the seat share memory when `seats share memory` is on.
 - **`seats include`** undoes it. The seat's own copy moves aside as `<item>.seats-backup`, not into the shared one, since it may hold things the other seats shouldn't see. A server comes back on the next `seats sync` or switch.
 
 ## One setup across tools
@@ -541,6 +573,7 @@ Seats never signs in for you and never sends credentials anywhere. Keys stay in 
 | `src/mcp/` | The tool-neutral MCP library and the JSON helpers adapters build on |
 | `src/trust.ts`, `src/herdr.ts` | Folder trust between seats on launch and from the session hook; resume commands for herdr |
 | `src/hook-paths.ts` | Points hooks in the shared settings that run through one seat at the shared copy |
+| `src/history.ts` | Sharing conversations and memory between seats (`seats share`) |
 | `src/fs.ts`, `src/types.ts`, `src/lib.ts` | Filesystem helpers, shared types, and the library API for other tools |
 | `plugins/` | The Paseo and herdr plugins |
 | `test/` | Tests, mirroring `src/`; `test/helpers/temp-home.ts` builds a throwaway `$HOME` |

@@ -1,5 +1,6 @@
 import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
+import { join } from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { seatSourceById } from "../providers/index.ts";
@@ -11,7 +12,8 @@ import { cancelIfNeeded, fail, intro, table, tilde, truncate } from "./ui.ts";
 /** Rows `seats sessions` shows before saying how many more there are. */
 const LIMIT = 20;
 
-export type SeatSession = Session & { seat: Seat };
+/** `seat` has the transcript; `seats` are every seat that sees that same file, `seat` first. */
+export type SeatSession = Session & { seat: Seat; seats: Seat[] };
 
 const real = (path: string) => (existsSync(path) ? realpathSync(path) : path);
 
@@ -26,14 +28,32 @@ export async function sessionSeats(home: string): Promise<Seat[]> {
   );
 }
 
-/** Every conversation of `seats`, newest first. */
+/** Seats grouped by the conversations they see: seats that share their history read one folder. */
+function bySessionFolder(seats: Seat[]): Seat[][] {
+  const groups = new Map<string, Seat[]>();
+  for (const seat of seats) {
+    const projects = seatSourceById(seat.source).history?.projects;
+    const key = real(projects ? join(seat.dir!, projects) : seat.dir!);
+    groups.set(key, [...(groups.get(key) ?? []), seat]);
+  }
+  return [...groups.values()];
+}
+
+/** Every conversation of `seats`, newest first, once each however many seats see it. */
 export function listSessions(seats: Seat[]): SeatSession[] {
-  return seats
-    .flatMap((seat) =>
-      (seatSourceById(seat.source).sessions?.list?.(seat.dir!) ?? []).map((item) => ({ ...item, seat })),
+  return bySessionFolder(seats)
+    .flatMap((group) =>
+      (seatSourceById(group[0]!.source).sessions?.list?.(group[0]!.dir!) ?? []).map((item) => ({
+        ...item,
+        seat: group[0]!,
+        seats: group,
+      })),
     )
     .sort((a, b) => +b.updatedAt - +a.updatedAt);
 }
+
+/** The seat that has a conversation, or "shared" when several see the same file. */
+export const seatLabel = (session: SeatSession) => (session.seats.length > 1 ? "shared" : session.seat.id);
 
 /** True when the conversation ran in `cwd`: what `claude --resume` lists there. */
 export function inFolder(session: Session, cwd: string): boolean {
@@ -51,7 +71,8 @@ export function ago(date: Date, now = new Date()): string {
 }
 
 const shortId = (id: string) => id.slice(0, 8);
-const describe = (session: SeatSession) => `${shortId(session.id)}  ${session.seat.id}  ${truncate(session.title, 50)}`;
+const describe = (session: SeatSession) =>
+  `${shortId(session.id)}  ${seatLabel(session)}  ${truncate(session.title, 50)}`;
 
 /**
  * Every copy of the one conversation whose id starts with `prefix`, newest
@@ -81,7 +102,16 @@ export function moveSession(sessions: SeatSession[], prefix: string, target: Sea
   if (seat.source !== target.source) throw new Error(`${id} is a ${seat.source} conversation; ${target.id} isn't.`);
   const noMove = seatSourceById(seat.source).sessions?.noMove;
   if (noMove) throw new Error(noMove);
-  const others = copies.filter((session) => session.seat.id !== target.id);
+  const sees = (session: SeatSession) => session.seats.some((item) => item.id === target.id);
+  const others = copies.filter((session) => !sees(session));
+  const shared = copies.find((session) => sees(session) && session.seats.length > 1);
+  if (shared)
+    throw new Error(
+      `${target.id} already sees ${shortId(id)}: it shares its conversations with ${shared.seats
+        .filter((item) => item.id !== target.id)
+        .map((item) => item.id)
+        .join(", ")}.`,
+    );
   if (others.length === 0) throw new Error(`${shortId(id)} is already on ${target.id}. Name another seat.`);
   if (others.length < copies.length && !force)
     throw new Error(`${target.id} already has ${shortId(id)}. Add --force to replace its copy.`);
@@ -119,7 +149,7 @@ export async function sessionsCommand(argv: string[]): Promise<void> {
   const idWidth = Math.max(...shown.map((session) => (fullId(session) ? session.id.length : 8)));
   const titleWidth = Math.max(20, (process.stdout.columns || 120) - 72 - idWidth);
   const rows = shown.map((session) => [
-    session.seat.id,
+    session.seats.length > 1 ? pc.dim(seatLabel(session)) : session.seat.id,
     pc.dim(ago(session.updatedAt, now)),
     session.cwd ? tilde(session.cwd) : pc.dim("—"),
     truncate(session.title, titleWidth),

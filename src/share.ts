@@ -1,8 +1,26 @@
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmdirSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { isInside, isSymlink, lexists, linkTarget, moveTree, replaceSymlink } from "./fs.ts";
 
 export type ShareReport = { linked: string[]; backups: string[] };
+
+/**
+ * `opaque`: files are compared byte for byte, never merged as JSON, and every
+ * copy that loses keeps its own backup. For conversations and memory, where
+ * the newest copy wins and a one-line JSON file must stay one line.
+ */
+export type ShareOptions = { opaque?: boolean };
 
 function mtime(path: string): number {
   return lstatSync(path).mtimeMs;
@@ -44,13 +62,30 @@ function covers(merged: unknown, older: unknown): boolean {
   return JSON.stringify(merged) === JSON.stringify(older);
 }
 
+/** True when both paths lead to the same file or folder. */
+export function sameFile(a: string, b: string): boolean {
+  try {
+    return realpathSync(a) === realpathSync(b);
+  } catch {
+    return false;
+  }
+}
+
 /** Folds a file into the shared copy. Returns false when `local` must be kept as a backup. */
-function absorbFile(local: string, shared: string, report: ShareReport): boolean {
+function absorbFile(local: string, shared: string, report: ShareReport, { opaque }: ShareOptions): boolean {
   const localData = readFileSync(local);
   const sharedData = readFileSync(shared);
   if (localData.equals(sharedData)) return true;
 
   const localNewer = mtime(local) > mtime(shared);
+  if (opaque) {
+    if (!localNewer) return false;
+    const saved = backupPath(shared);
+    writeFileSync(saved, sharedData);
+    report.backups.push(saved);
+    writeFileSync(shared, localData);
+    return true;
+  }
   const [newer, older] = localNewer ? [localData, sharedData] : [sharedData, localData];
   const newerJson = parseRecord(newer);
   const olderJson = parseRecord(older);
@@ -77,22 +112,28 @@ function absorbFile(local: string, shared: string, report: ShareReport): boolean
 }
 
 /** Moves whatever fits from `local` into `shared`, leaving only conflicts behind. */
-function absorb(local: string, shared: string, report: ShareReport): void {
+function absorb(local: string, shared: string, report: ShareReport, options: ShareOptions): void {
   const from = lstatSync(local);
   const to = lstatSync(shared);
+
+  // A link that already leads to the shared copy, e.g. memory shared before history.
+  if (from.isSymbolicLink()) {
+    if (sameFile(local, shared)) unlinkSync(local);
+    return;
+  }
 
   if (from.isDirectory() && to.isDirectory()) {
     for (const name of readdirSync(local)) {
       const child = join(local, name);
       const target = join(shared, name);
       if (!lexists(target)) moveTree(child, target);
-      else absorb(child, target, report);
+      else absorb(child, target, report, options);
     }
     if (readdirSync(local).length === 0) rmdirSync(local);
     return;
   }
 
-  if (from.isFile() && to.isFile() && absorbFile(local, shared, report)) {
+  if (from.isFile() && to.isFile() && absorbFile(local, shared, report, options)) {
     rmSync(local);
   }
 }
@@ -109,6 +150,7 @@ export function shareItems(
   sharedRoot: string,
   items: string[],
   keep: (dir: string, item: string) => boolean = () => false,
+  options: ShareOptions = {},
 ): ShareReport {
   const report: ShareReport = { linked: [], backups: [] };
 
@@ -117,7 +159,8 @@ export function shareItems(
     const locals = seatDirs
       .filter((dir) => !keep(dir, item))
       .map((dir) => join(dir, item))
-      .filter((path) => lexists(path) && !isSymlink(path))
+      // A path reached through a linked parent may be the shared copy itself.
+      .filter((path) => lexists(path) && !isSymlink(path) && !sameFile(path, shared))
       .sort((a, b) => mtime(b) - mtime(a));
 
     for (const local of locals) {
@@ -126,7 +169,7 @@ export function shareItems(
         moveTree(local, shared);
         continue;
       }
-      absorb(local, shared, report);
+      absorb(local, shared, report, options);
       if (lexists(local)) {
         const saved = backupPath(local);
         moveTree(local, saved);

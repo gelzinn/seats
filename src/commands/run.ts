@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   renameSync,
@@ -13,12 +14,14 @@ import {
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import pc from "picocolors";
-import { isInside } from "../fs.ts";
+import { isInside, isSymlink } from "../fs.ts";
 import { reportHerdrResume } from "../herdr.ts";
+import { linkFromSession, linkSessionHistory } from "../history.ts";
 import { discoverSeatDirs, type SeatDir } from "../home-dirs.ts";
 import { listSeatDirs } from "../lib.ts";
 import { findPin, type Pin } from "../pins.ts";
 import { seatSources } from "../providers/index.ts";
+import { sameFile } from "../share.ts";
 import { readConfig, seatsHome, writeConfig } from "../store.ts";
 import { pullTrust, pushFromSession } from "../trust.ts";
 import type { Seat, SeatSource, Usage } from "../types.ts";
@@ -85,20 +88,39 @@ export async function nextAvailable(
 const real = (path: string) => (existsSync(path) ? realpathSync(path) : path);
 
 /**
+ * Where `path` sits inside seat folder `dir`: read from the path itself, else
+ * from real paths, where a shared folder linked into the seat counts as its own.
+ */
+function insideSeat(path: string, dir: string): string | undefined {
+  if (isInside(resolve(path), resolve(dir))) return relative(resolve(dir), resolve(path));
+  const file = real(path);
+  if (isInside(file, real(dir))) return relative(real(dir), file);
+  for (const name of readdirSync(dir)) {
+    const link = join(dir, name);
+    if (isSymlink(link) && existsSync(link) && isInside(file, real(link)))
+      return join(name, relative(real(link), file));
+  }
+  return undefined;
+}
+
+/**
  * Copies a session from one seat to another so the next seat can resume it:
  * `<id>.jsonl` and its `<id>/` folder, at the same place under the new seat.
+ * Seats that share their history already have it: nothing is copied.
  */
 export function copyTranscript(transcript: string, fromDir: string, toDir: string): string | undefined {
   const from = real(transcript);
-  const seatDir = real(fromDir);
-  if (!existsSync(from) || !isInside(from, seatDir)) return undefined;
-  const to = join(toDir, relative(seatDir, from));
+  const rel = existsSync(from) ? insideSeat(transcript, fromDir) : undefined;
+  if (rel === undefined) return undefined;
+  const to = join(toDir, rel);
+  if (sameFile(to, from)) return to;
   mkdirSync(dirname(to), { recursive: true });
   // Keeping mtimes keeps the conversation where it was in the list of recent ones.
   cpSync(from, to, { preserveTimestamps: true });
   const folder = from.replace(/\.jsonl$/, "");
-  if (folder !== from && existsSync(folder))
-    cpSync(folder, to.replace(/\.jsonl$/, ""), { recursive: true, preserveTimestamps: true });
+  const target = to.replace(/\.jsonl$/, "");
+  if (folder !== from && existsSync(folder) && !sameFile(folder, target))
+    cpSync(folder, target, { recursive: true, preserveTimestamps: true });
   return to;
 }
 
@@ -241,6 +263,8 @@ export async function supervise(options: SuperviseOptions): Promise<number> {
     for (;;) {
       // Trust given on another seat since this one last ran, so its CLI doesn't ask again.
       pullTrust(home, source, seat.dir!);
+      // Shared memory for this project, when it's new to this seat.
+      linkSessionHistory(home, source, seat.dir!, cwd);
       const child = spawn(binary, [...(supervised ? failover.settingsArgs(settings) : []), ...args], {
         stdio: "inherit",
         cwd,
@@ -404,12 +428,23 @@ async function readStdin(): Promise<string> {
   return input;
 }
 
+/** The folder a hook's session runs in, from the JSON the CLI passes on stdin. */
+function sessionCwd(input: string): string | undefined {
+  try {
+    const cwd = (JSON.parse(input) as { cwd?: unknown }).cwd;
+    return typeof cwd === "string" && cwd ? cwd : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Run by hooks, never by hand:
  * - `seats hook limit`, the CLI's limit hook, hands the report to the
  *   supervising seats process; outside a supervised session it does nothing.
  * - `seats hook session`, Claude Code's SessionStart and Stop hooks, carries
- *   folder trust from this seat to the others.
+ *   folder trust from this seat to the others, and links shared memory and
+ *   conversations for a project or seat that's new to them.
  * - `seats hook herdr`, the herdr plugin, tells herdr to resume a pane's
  *   conversation on the seat that has it.
  *
@@ -419,8 +454,9 @@ async function readStdin(): Promise<string> {
 export async function hookCommand(argv: string[]): Promise<void> {
   if (argv[0] === "session") {
     try {
-      await readStdin();
+      const input = await readStdin();
       pushFromSession(homedir());
+      linkFromSession(homedir(), sessionCwd(input) ?? process.cwd());
     } catch {
       // A hook must never get in the session's way.
     }

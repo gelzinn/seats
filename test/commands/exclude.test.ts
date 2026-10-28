@@ -167,7 +167,13 @@ describe("excludeMcp", () => {
     expect(report.mcp.added).not.toContain("claude: gmail");
     expect(json(acme).mcpServers.gmail).toBeUndefined();
     expect(json(join(seat("personal"), ".claude.json")).mcpServers.gmail).toBeDefined();
-    expect(listExclusions(home, "claude:acme")).toEqual({ items: [], mcp: ["gmail"], trust: false });
+    expect(listExclusions(home, "claude:acme")).toEqual({
+      items: [],
+      mcp: ["gmail"],
+      trust: false,
+      memory: false,
+      sessions: false,
+    });
   });
 
   test("seats install leaves the seat out, even with --force and after an uninstall", () => {
@@ -226,7 +232,13 @@ describe("excludeTrust", () => {
     expect(excludeTrust(home, "claude:acme")).toBe(true);
     expect(excludeTrust(home, "claude:acme")).toBe(false);
     expect(readConfig(home).ownTrust).toEqual(["claude:acme"]);
-    expect(listExclusions(home, "claude:acme")).toEqual({ items: [], mcp: [], trust: true });
+    expect(listExclusions(home, "claude:acme")).toEqual({
+      items: [],
+      mcp: [],
+      trust: true,
+      memory: false,
+      sessions: false,
+    });
 
     env.write(".config/seats/claude/personal/.claude.json", {
       ...json(personal),

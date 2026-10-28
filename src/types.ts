@@ -56,6 +56,20 @@ export type SeatSource = {
       rewrite: (command: string) => string,
     ) => Record<string, unknown> | undefined;
   };
+  /**
+   * Conversations and per-project memory. Never in `sharedItems`: seats
+   * shares them only when asked to (`seats share sessions|memory`).
+   */
+  history?: {
+    /** Folder of per-project folders, each with its conversations and a memory folder. */
+    projects: string;
+    /** Everything a conversation resumes or rewinds from, `projects` first. */
+    items: string[];
+    /** Name of the memory folder inside a project folder. */
+    memory: string;
+    /** The project folder whose memory a session in `cwd` reads. */
+    memoryProject: (cwd: string) => string;
+  };
   /** Seat files that may hold absolute paths to the seat folder, rewritten by `seats migrate`. */
   pathFiles?: string[];
   /** Shared items that only hold on this machine (downloads, folder trust), left out of `seats export`. */

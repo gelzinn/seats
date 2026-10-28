@@ -54,6 +54,14 @@ export type SeatsConfig = {
   exclude?: Record<string, string[]>;
   /** Seats that keep their own folder trust and approvals (`seats exclude <id> trust`): they neither give nor get any. */
   ownTrust?: string[];
+  /** Every seat sees the same per-project memory (`seats share memory on`). */
+  shareMemory?: boolean;
+  /** Every seat sees the same conversations, memory included (`seats share sessions on`). */
+  shareSessions?: boolean;
+  /** Seats that keep their own memory, and so their own conversations too (`seats exclude <id> memory`). */
+  ownMemory?: string[];
+  /** Seats that keep their own conversations (`seats exclude <id> sessions`). */
+  ownSessions?: string[];
 };
 
 export const configFile = (home: string) => join(seatsHome(home), "config.json");
