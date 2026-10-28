@@ -110,6 +110,8 @@ export type SeatSource = {
     resumeArgs: (sessionId: string) => string[];
     /** The transcript of session `sessionId` in seat folder `dir`, when the seat has it. Fast: reads no transcript. */
     find?: (dir: string, sessionId: string) => string | undefined;
+    /** The session that CLI args reopen, read back from what `resumeArgs` writes; undefined for a new session. */
+    resumedId?: (args: string[]) => string | undefined;
   };
 };
 

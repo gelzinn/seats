@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -320,6 +320,51 @@ describe("supervise", () => {
     expect(launches(log)).toHaveLength(1);
   });
 
+  describe("resuming on a seat already at its limit", () => {
+    const resume = async (args: string[]) => {
+      const said = spyOn(console, "error").mockImplementation(() => {});
+      const seats = [seat("work"), seat("personal")];
+      try {
+        const code = await supervise({
+          home: env.home,
+          source: claude,
+          seats,
+          start: seats[0]!,
+          args,
+          autoSwitch: true,
+          usageOf: usageFrom({ "claude:work": at(100) }),
+        });
+        return { code, said: said.mock.calls.map((call) => String(call[0])).join("\n") };
+      } finally {
+        said.mockRestore();
+      }
+    };
+
+    test("brings the conversation to the next seat and resumes it there", async () => {
+      const log = fakeClaude();
+      env.write(".config/seats/claude/work/projects/-repo/s1.jsonl", '{"type":"user"}\n');
+      const { code, said } = await resume(["--resume", "s1"]);
+      expect(code).toBe(0);
+      const [launch, ...more] = launches(log).map((line) => line.split("|"));
+      expect(more).toEqual([]);
+      expect(launch![0]).toBe("personal");
+      expect(launch![1]).toEndWith("--resume s1");
+      expect(readFileSync(join(seat("personal").dir!, "projects/-repo/s1.jsonl"), "utf8")).toBe('{"type":"user"}\n');
+      expect(said).toContain("Continuing the conversation on");
+    });
+
+    test("stays on the seat that has it when the conversation can't be found", async () => {
+      const log = fakeClaude();
+      const { code, said } = await resume(["--resume", "gone"]);
+      expect(code).toBe(0);
+      const [launch, ...more] = launches(log).map((line) => line.split("|"));
+      expect(more).toEqual([]);
+      expect(launch![0]).toBe("work");
+      expect(launch![1]).toEndWith("--resume gone");
+      expect(said).toContain("claude:work is at its usage limit, but its conversation can't move to claude:personal.");
+    });
+  });
+
   test("with auto-switch off, just runs the seat, with no hook and no usage checks", async () => {
     const log = fakeClaude();
     const seats = [seat("work"), seat("personal")];
@@ -341,5 +386,21 @@ describe("supervise", () => {
     ).toBe(0);
     expect(launches(log)).toEqual(["work|-c|"]);
     expect(checked).toBe(false);
+  });
+});
+
+describe("resumedId", () => {
+  test("reads the session back from each tool's own resume args", () => {
+    const claudeId = seatSourceById("claude").sessions!.resumedId!;
+    expect(claudeId(["--resume", "s1"])).toBe("s1");
+    expect(claudeId(["-r", "s1", "fix it"])).toBe("s1");
+    expect(claudeId(["--resume=s1"])).toBe("s1");
+    expect(claudeId(["--resume"])).toBeUndefined();
+    expect(claudeId(["-c"])).toBeUndefined();
+
+    const codexId = seatSourceById("codex").sessions!.resumedId!;
+    expect(codexId(["resume", "c1"])).toBe("c1");
+    expect(codexId(["resume", "--last"])).toBeUndefined();
+    expect(codexId(["exec", "resume"])).toBeUndefined();
   });
 });

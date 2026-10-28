@@ -127,8 +127,19 @@ export function findClaudeSession(dir: string, sessionId: string): string | unde
   return undefined;
 }
 
+/** `--resume <id>`, `-r <id>` or `--resume=<id>`. A bare `--resume` opens a picker: no session yet. */
+export function claudeResumedId(args: string[]): string | undefined {
+  for (const [index, arg] of args.entries()) {
+    if (arg.startsWith("--resume=")) return arg.slice("--resume=".length) || undefined;
+    const next = args[index + 1];
+    if ((arg === "--resume" || arg === "-r") && next && !next.startsWith("-")) return next;
+  }
+  return undefined;
+}
+
 export const claudeSessions: NonNullable<SeatSource["sessions"]> = {
   list: claudeSessionList,
   resumeArgs: (sessionId) => claudeFailover.resumeArgs(sessionId),
   find: findClaudeSession,
+  resumedId: claudeResumedId,
 };

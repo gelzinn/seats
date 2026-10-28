@@ -173,7 +173,7 @@ Tools that launch a CLI themselves can honour pins with `pinnedSeat` from the [l
 
 Off by default. Turn it on with `seats auto-switch on`. Tools you launch through seats (`seats`, or `seats run <tool>`) then keep going when an account runs out:
 
-- **Before launching,** seats checks the seat's usage and, if it's at a limit, picks the next seat of the same tool that isn't. This works for Claude Code and Codex, and costs nothing: it reads the same usage endpoints their apps show.
+- **Before launching,** seats checks the seat's usage and, if it's at a limit, picks the next seat of the same tool that isn't. This works for Claude Code and Codex, and costs nothing: it reads the same usage endpoints their apps show. A launch that resumes a conversation (`--resume <id>`, as `seats move` and the herdr plugin do) copies it to that next seat first; when it can't (Codex, or a conversation the seat doesn't have), seats opens the seat you asked for anyway and says it's at its limit, rather than an empty session elsewhere.
 - **Mid-session (Claude Code),** when a turn fails on the usage limit, seats closes that session, copies the conversation to the next seat and reopens it there with `claude --resume`. It then sends "Continue where you left off." so the work goes on by itself. Use `seats auto-switch on --no-continue` to resume without sending anything.
 - When every seat is out, seats stops and tells you when the first one resets.
 
