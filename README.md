@@ -94,8 +94,11 @@ seats sync               # share config between seats and across tools
 seats exclude claude:acme CLAUDE.md   # give one seat its own copy of a shared item
 seats exclude claude:acme mcp gmail   # keep an MCP server out of one seat
 seats exclude claude:acme trust       # this seat neither gives nor gets folder trust
+seats share sessions on  # off by default: every Claude seat sees the same conversations
+seats doctor             # check the session hook and the herdr and Paseo plugins
 seats install mcp docs -- npx -y docs-mcp   # add an MCP server to every tool
 seats uninstall mcp docs                    # and take it out of every tool
+seats install plugin herdr                  # herdr reopens each pane on its own seat
 seats export ~/dotfiles/seats   # your shared setup, without secrets, to carry to another machine
 seats import ~/dotfiles/seats   # and add it on the new machine
 seats migrate --dry-run  # preview moving ~/.<tool>-* into ~/.config/seats
@@ -186,7 +189,7 @@ Tools that launch a CLI themselves can honour pins with `pinnedSeat` from the [l
 
 Off by default. Turn it on with `seats auto-switch on`. Tools you launch through seats (`seats`, or `seats run <tool>`) then keep going when an account runs out:
 
-- **Before launching,** seats checks the seat's usage and, if it's at a limit, picks the next seat of the same tool that isn't. This works for Claude Code and Codex, and costs nothing: it reads the same usage endpoints their apps show. A launch that resumes a conversation (`--resume <id>`, as `seats move` and the herdr plugin do) copies it to that next seat first; when it can't (Codex, or a conversation the seat doesn't have), seats opens the seat you asked for anyway and says it's at its limit, rather than an empty session elsewhere.
+- **Before launching,** seats checks the seat's usage and, if it's at a limit, picks the next seat of the same tool that isn't. This works for Claude Code and Codex, and costs nothing: it reads the same usage endpoints their apps show. A launch that resumes a conversation (`seats run claude:work --resume <id>`, as the herdr plugin restores a pane) copies it to that next seat first; when it can't (Codex, or a conversation the seat doesn't have), seats opens the seat you asked for anyway and says it's at its limit, rather than an empty session elsewhere.
 - **Mid-session (Claude Code),** when a turn fails on the usage limit, seats closes that session, copies the conversation to the next seat and reopens it there with `claude --resume`. It then sends "Continue where you left off." so the work goes on by itself. Use `seats auto-switch on --no-continue` to resume without sending anything.
 - When every seat is out, seats stops and tells you when the first one resets.
 
@@ -344,7 +347,7 @@ When a tool has two or more seats, activating one of them, or running `seats syn
 
 | Tool | Shared between seats | Stays per account |
 | --- | --- | --- |
-| **Claude** | See the table below | `.credentials.json`, sessions, history (unless [shared](#share-memory-and-conversations-between-seats)) |
+| **Claude** | See the table below | `.credentials.json`, prompt history, and sessions unless [shared](#share-memory-and-conversations-between-seats) |
 | **Codex** | `config.toml` (MCP servers and trusted projects), `AGENTS.md`, `agents/`, `skills/`, `rules/`, `prompts/`, `hooks.json` | `auth.json`, sessions, history |
 | **Gemini** | `settings.json`, `GEMINI.md`, `trustedFolders.json`, `skills/`, `commands/`, `extensions/` | `oauth_creds.json`, `google_accounts.json` |
 | **Copilot** | `settings.json`, `mcp-config.json`, `copilot-instructions.md`, `instructions/`, `agents/`, `skills/`, `hooks/` | `config.json`, MCP OAuth and secrets |
@@ -357,7 +360,7 @@ When a tool has two or more seats, activating one of them, or running `seats syn
 | Shared across seats | Stays per account |
 | --- | --- |
 | `settings.json`, `CLAUDE.md`, `keybindings.json`, `statusline-command.sh` | Login (`.credentials.json`) and `oauthAccount` |
-| `agents/`, `commands/`, `skills/`, `hooks/`, `output-styles/`, `themes/` | Sessions, history, transcripts and memory, unless you [share them](#share-memory-and-conversations-between-seats) |
+| `agents/`, `commands/`, `skills/`, `hooks/`, `output-styles/`, `themes/` | Prompt history (`history.jsonl`), and sessions, transcripts and memory unless you [share them](#share-memory-and-conversations-between-seats) |
 | Installed plugins, marketplaces and plugin cache | Org-synced plugins (`plugins/synced`) and policy limits |
 | User MCP servers (`mcpServers` in `.claude.json`) | MCP OAuth tokens, so each account authenticates once |
 | Folder trust, approved tools and approved `.mcp.json` servers | Usage stats and onboarding state |
@@ -508,7 +511,7 @@ seatEnv("claude", "work"); // { CLAUDE_CONFIG_DIR: "/home/you/.config/seats/clau
 
 `listSeatDirs(provider)` lists every seat folder, signed in or not. `pinnedSeat(provider, cwd)` returns the `{ slug, file }` a project's `.seats` pins, or undefined. It doesn't check that the seat exists, so pass the slug to `seatDir` and report a missing seat rather than falling back. The library only reads folders and never runs a CLI.
 
-**Paseo.** [`plugins/paseo`](plugins/paseo) is a Paseo plugin that sets `CLAUDE_CONFIG_DIR` from seats whenever a `claude-<seat>` provider opens a session. Keep the provider's `env` in Paseo's `config.json` too, because provider diagnostics and model listing don't go through the plugin. Paseo only loads modules from inside the plugin folder, so the plugin installs seats as a copy (`install-links`). After changing the library, run `bun run build` here and `npm install` in `plugins/paseo`, then reload the plugin. `seats install plugin paseo` prints the config to add. It used to live in `integrations/paseo`: if you linked Paseo to that path, point it at `plugins/paseo` instead (`seats doctor` notices).
+**Paseo.** [`plugins/paseo`](plugins/paseo) is a Paseo plugin that sets the seat's folder (`CLAUDE_CONFIG_DIR`, or `CODEX_HOME` for Codex) from seats whenever a provider named `<tool>-<seat>`, like `claude-work`, opens a session. Keep the provider's `env` in Paseo's `config.json` too, because provider diagnostics and model listing don't go through the plugin. Paseo only loads modules from inside the plugin folder, so the plugin installs seats as a copy (`install-links`). After changing the library, run `bun run build` here and `npm install` in `plugins/paseo`, then reload the plugin. `seats install plugin paseo` prints the config to add. It used to live in `integrations/paseo`: if you linked Paseo to that path, point it at `plugins/paseo` instead (`seats doctor` notices).
 
 **herdr.** [`plugins/herdr`](plugins/herdr) makes [herdr](https://herdr.dev) reopen each Claude Code and Codex pane on the seat its conversation ran on. On its own, herdr restores those panes after a restart with `claude --resume <id>` or `codex resume <id>`, which open the active seat. The plugin runs `seats hook herdr` when herdr detects Claude Code or Codex in a pane or the pane's status changes, finds the seat that has the conversation (when several have it, the one the pane's agent runs on, else the most recently written copy) and reports `seats run claude:<seat> --resume <id>` or `seats run codex:<seat> resume <id>` to herdr, which then uses it over its own. Codex conversations are found by file name. Needs herdr 0.9.2 or later, its integration for each tool (`herdr integration install claude`, `herdr integration install codex`) and `seats` on your `PATH`:
 
@@ -567,7 +570,7 @@ Seats never signs in for you and never sends credentials anywhere. Keys stay in 
 | `src/providers/index.ts` | The list of providers; everything else reads from it |
 | `src/providers/helpers/` | Code shared by several providers (seat folders, API keys) |
 | `src/cli.ts` | Help text and routing to the commands |
-| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `run` (`run`, `auto-switch`, `hook`), `pin` (`pin`, `unpin`), `sessions` (`sessions`, `move`), `manage` (`rename`, `remove`), `add`, `health`, `usage`, `sync`, `install` (`install`, `uninstall`), `migrate` |
+| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `run` (`run`, `auto-switch`, `hook`), `pin` (`pin`, `unpin`), `sessions` (`sessions`, `move`), `share`, `exclude` (`exclude`, `include`), `manage` (`rename`, `remove`), `add`, `desktop`, `health`, `usage`, `doctor`, `sync`, `install` (`install`, `uninstall`), `plugin` (`install plugin`, `uninstall plugin`), `export` (`export`, `import`), `migrate` |
 | `src/home-dirs.ts`, `src/store.ts` | Finding and naming seat folders; the `~/.config/seats` layout and `active.env` |
 | `src/share.ts`, `src/skills.ts`, `src/instructions.ts` | Sharing files between seats, and skills and instructions across tools |
 | `src/mcp/` | The tool-neutral MCP library and the JSON helpers adapters build on |
