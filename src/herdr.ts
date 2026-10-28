@@ -38,8 +38,9 @@ export function resumableInHerdr(argv: string[]): boolean {
 
 /**
  * The command that reopens session `sessionId` of `agent` on the seat that has
- * it: `seats run claude:work --resume <id>`. When several seats have it (after
- * `seats move` or an auto-switch), the one written to last wins.
+ * it: `seats run claude:work --resume <id>`, `seats run codex:work resume <id>`.
+ * When several seats have it (after `seats move` or an auto-switch), the one
+ * written to last wins.
  */
 export function resumeCommand(home: string, agent: string, sessionId: string): string[] | undefined {
   const source = seatSources.find((item) => item.id === agent && item.sessions?.find);
@@ -55,9 +56,10 @@ export function resumeCommand(home: string, agent: string, sessionId: string): s
 /**
  * `seats hook herdr`, run by the herdr plugin on `pane.agent_detected` and
  * `pane.agent_status_changed`: reports to herdr how to resume the pane's
- * conversation on its own seat, which then wins over herdr's `claude --resume`
- * (that one opens the active seat). A command already reported for the pane
- * isn't sent again, so a status change every turn costs one `pane get`.
+ * conversation on its own seat, which then wins over herdr's own
+ * `claude --resume` or `codex resume` (those open the active seat). A command
+ * already reported for the pane isn't sent again, so a status change every
+ * turn costs one `pane get`.
  */
 export function reportHerdrResume(home: string, env: NodeJS.ProcessEnv = process.env): void {
   const event = parse(env.HERDR_PLUGIN_EVENT_JSON);
@@ -73,7 +75,7 @@ export function reportHerdrResume(home: string, env: NodeJS.ProcessEnv = process
     mkdirSync(env.HERDR_PLUGIN_STATE_DIR!, { recursive: true });
     writeFileSync(stateFile, `${JSON.stringify(state)}\n`);
   };
-  // A new claude in the pane, e.g. a restored one: report again even with the same command.
+  // A new agent process in the pane, e.g. a restored one: report again even with the same command.
   if (env.HERDR_PLUGIN_EVENT === "pane.agent_detected" && paneId in state) {
     delete state[paneId];
     save();
@@ -104,7 +106,7 @@ export function reportHerdrResume(home: string, env: NodeJS.ProcessEnv = process
     "--",
     ...argv,
   ]);
-  // Refused (herdr hasn't seen claude in the pane yet): the next event tries again.
+  // Refused (herdr hasn't detected the agent in the pane yet): the next event tries again.
   if (reported.status !== 0) return;
   state[paneId] = key;
   save();

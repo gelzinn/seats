@@ -98,12 +98,14 @@ export type SeatSource = {
     resumeArgs: (sessionId: string, prompt?: string) => string[];
   };
   /**
-   * The conversations a seat keeps, for `seats sessions` and `seats move`.
-   * A session is one file that resumes from the same path in any seat.
+   * The conversations a seat keeps. With `list`, for `seats sessions` and
+   * `seats move`: a session is one file that resumes from the same path in
+   * any seat. With only `find`, seats can name the seat that has a session
+   * (`seats hook herdr`) but never lists or copies them.
    */
   sessions?: {
     /** Conversations kept in the seat folder `dir`, in no particular order. */
-    list: (dir: string) => Session[];
+    list?: (dir: string) => Session[];
     /** Args that reopen a session. */
     resumeArgs: (sessionId: string) => string[];
     /** The transcript of session `sessionId` in seat folder `dir`, when the seat has it. Fast: reads no transcript. */

@@ -3,7 +3,7 @@ name = "Seats"
 version = "0.1.0"
 # Resume commands reported by a plugin need herdr 0.9.2.
 min_herdr_version = "0.9.2"
-description = "Resume Claude Code panes on the seat each conversation ran on"
+description = "Resume Claude Code and Codex panes on the seat each conversation ran on"
 platforms = ["linux", "macos"]
 
 [[events]]

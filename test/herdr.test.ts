@@ -76,6 +76,23 @@ describe("seats hook herdr", () => {
     expect(hook(bin, log)).toEqual([report("work", "s1")]);
   });
 
+  test("reports the Codex seat that has the rollout, with codex resume", () => {
+    const { bin, log } = fakeHerdr();
+    const older = env.write(
+      ".config/seats/codex/work/sessions/2026/10/15/rollout-2026-10-15T19-25-01-c1.jsonl",
+      "{}\n",
+    );
+    const newer = env.write(".config/seats/codex/home/archived_sessions/rollout-2026-10-15T19-25-01-c1.jsonl", "{}\n");
+    utimesSync(older, 1_000, 1_000);
+    utimesSync(newer, 2_000, 2_000);
+    pane("codex", "c1");
+    expect(hook(bin, log)).toEqual([
+      expect.stringMatching(
+        /^pane report-agent-session w1:p2 --source seats --agent codex --seq \d+ -- seats run codex:home resume c1$/,
+      ),
+    ]);
+  });
+
   test("the newest copy wins when several seats have it", () => {
     const { bin, log } = fakeHerdr();
     transcript("work", "s1", 1_000);

@@ -22,14 +22,16 @@ const real = (path: string) => (existsSync(path) ? realpathSync(path) : path);
 export async function sessionSeats(home: string): Promise<Seat[]> {
   const signedIn = await discoverSeats(home, "cli");
   return [...signedIn, ...signedOutSeats(home, signedIn, undefined)].filter(
-    (seat) => seat.dir && seatSourceById(seat.source).sessions,
+    (seat) => seat.dir && seatSourceById(seat.source).sessions?.list,
   );
 }
 
 /** Every conversation of `seats`, newest first. */
 export function listSessions(seats: Seat[]): SeatSession[] {
   return seats
-    .flatMap((seat) => (seatSourceById(seat.source).sessions?.list(seat.dir!) ?? []).map((item) => ({ ...item, seat })))
+    .flatMap((seat) =>
+      (seatSourceById(seat.source).sessions?.list?.(seat.dir!) ?? []).map((item) => ({ ...item, seat })),
+    )
     .sort((a, b) => +b.updatedAt - +a.updatedAt);
 }
 

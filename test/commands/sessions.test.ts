@@ -60,6 +60,15 @@ describe("sessionSeats", () => {
     env.write(".config/seats/claude/old/.claude.json", "{}");
     expect((await sessionSeats(env.home)).map((item) => [item.id, item.signedIn])).toEqual([["claude:old", false]]);
   });
+
+  test("leaves Codex out, even with a conversation: seats only finds those for herdr", async () => {
+    env.write(".config/seats/claude/old/.claude.json", "{}");
+    env.write(".config/seats/codex/work/auth.json", "{}");
+    env.write(".config/seats/codex/work/sessions/2026/10/15/rollout-2026-10-15T19-25-01-c1.jsonl", "{}\n");
+    const seats = await sessionSeats(env.home);
+    expect(seats.map((item) => item.id)).toEqual(["claude:old"]);
+    expect(listSessions(seats)).toEqual([]);
+  });
 });
 
 describe("moveSession", () => {
