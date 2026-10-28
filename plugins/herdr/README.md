@@ -1,6 +1,6 @@
 Seats makes herdr reopen each Claude Code and Codex pane on the seat its conversation ran on. Without it, herdr restores those panes after a server restart with `claude --resume <id>` or `codex resume <id>`, which open the active seat (`~/.claude`, `~/.codex`), not the account that had the conversation.
 
-When herdr detects Claude Code or Codex in a pane, or the pane's status changes, the plugin runs `seats hook herdr`. It reads the pane's session id from herdr, finds the seat of that tool that has the conversation (the most recently written copy when several do, e.g. after `seats move` or an auto-switch) and reports `seats run claude:<seat> --resume <id>` or `seats run codex:<seat> resume <id>` as the pane's resume command. herdr saves it with the session and uses it over its own on restore. A command already reported for a pane isn't sent again.
+When herdr detects Claude Code or Codex in a pane, or the pane's status changes, the plugin runs `seats hook herdr`. It reads the pane's session id from herdr, finds the seat of that tool that has the conversation (the most recently written copy when several do, e.g. after `seats move` or an auto-switch) and reports `seats run claude:<seat> --resume <id>` or `seats run codex:<seat> resume <id>` as the pane's resume command. herdr saves it with the session and uses it over its own on restore. A command already reported for a pane isn't sent again, and the seats are only searched again when the pane's session changes or herdr detects a new agent process in it.
 
 ## Setup
 

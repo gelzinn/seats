@@ -124,8 +124,43 @@ describe("seats hook herdr", () => {
     expect(hook(bin, log)).toHaveLength(1);
     expect(hook(bin, log, "pane.agent_detected")).toHaveLength(2);
 
+    // Moved under the same id (an auto-switch): herdr detects the new claude process.
     transcript("personal", "s1", 2_000);
-    expect(hook(bin, log)).toEqual([report("work", "s1"), report("work", "s1"), report("personal", "s1")]);
+    expect(hook(bin, log)).toHaveLength(2);
+    expect(hook(bin, log, "pane.agent_detected")).toEqual([
+      report("work", "s1"),
+      report("work", "s1"),
+      report("personal", "s1"),
+    ]);
+  });
+
+  test("searches the seats again only when the pane's session changes", () => {
+    const { bin, log } = fakeHerdr();
+    transcript("work", "s1", 1_000);
+    transcript("personal", "s2", 1_000);
+    pane("claude", "s1");
+    hook(bin, log);
+    // A status change on the same session doesn't look: a newer copy elsewhere goes unseen.
+    rmSync(join(env.home, ".config/seats/claude/work"), { recursive: true });
+    expect(hook(bin, log)).toEqual([report("work", "s1")]);
+    pane("claude", "s2");
+    expect(hook(bin, log)).toEqual([report("work", "s1"), report("personal", "s2")]);
+    const state = JSON.parse(readFileSync(join(env.home, "state/reported.json"), "utf8"));
+    expect(state["w1:p2"]).toEqual({ session: "claude:s2", command: "seats run claude:personal --resume s2" });
+  });
+
+  test("reads the state older versions saved, a command per pane", () => {
+    const { bin, log } = fakeHerdr();
+    transcript("work", "s1", 1_000);
+    pane("claude", "s1");
+    env.write("state/reported.json", { "w1:p2": "seats run claude:work --resume s1" });
+    expect(hook(bin, log)).toEqual([]);
+    expect(JSON.parse(readFileSync(join(env.home, "state/reported.json"), "utf8"))["w1:p2"]).toEqual({
+      session: "claude:s1",
+      command: "seats run claude:work --resume s1",
+    });
+    env.write("state/reported.json", { "w1:p2": "seats run claude:old --resume s1" });
+    expect(hook(bin, log)).toEqual([report("work", "s1")]);
   });
 
   test("swallows resume_not_accepted, and tries again on the next event", () => {
