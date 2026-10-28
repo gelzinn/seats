@@ -64,9 +64,11 @@ Usage:
                         skip the sign-out)
   seats sync            Share config and trust between seats, and MCP servers,
                         skills and instructions across tools; point hooks that
-                        run through one seat at the shared copy (--dry-run to preview)
+                        run through one seat at the shared copy (--dry-run to
+                        preview)
   seats doctor          Check the session hook, seats on PATH, the herdr plugin
-                        and integrations, and Paseo's plugin path, with a fix for each
+                        and integrations, and Paseo's plugin path, with a fix
+                        for each
   seats share memory|sessions on|off|status
                         Off by default. Give every Claude seat the same
                         per-project memory, or the same conversations (resume,
@@ -86,10 +88,11 @@ Usage:
   seats uninstall mcp|skill <name>
                         Remove it from every tool; a server is marked so sync
                         won't add it back (--dry-run to preview)
-  seats install plugin herdr
-  seats uninstall plugin herdr
+  seats install plugin herdr|paseo
+  seats uninstall plugin herdr|paseo
                         Add or remove the herdr plugin that resumes panes on
-                        their seat (--dry-run to preview; paseo prints the steps)
+                        their seat (--dry-run to preview); for paseo, print
+                        the steps
   seats export <folder> Write your shared setup (MCP servers, skills, instructions,
                         shared tool config) to a folder, without secrets or
                         accounts, to carry to another machine (--dry-run to preview)

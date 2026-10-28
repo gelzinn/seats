@@ -4,7 +4,7 @@ It runs on every session open (create, resume, refresh and import), so moving or
 
 ## Setup
 
-Define each provider in `agents.providers` as `<cli>-<seat slug>` extending the CLI, for example `"claude-primary": { "extends": "claude", "label": "Claude · Primary" }`. Seats with no matching folder, providers without a dash, and CLIs without a config folder variable are left unchanged. Only Claude has one today (`CLAUDE_CONFIG_DIR`).
+Define each provider in `agents.providers` as `<cli>-<seat slug>` extending the CLI, for example `"claude-primary": { "extends": "claude", "label": "Claude · Primary" }`. Seats with no matching folder, providers without a dash, and CLIs without a config folder variable are left unchanged. Claude (`CLAUDE_CONFIG_DIR`) and Codex (`CODEX_HOME`) have one.
 
 ## Limits
 

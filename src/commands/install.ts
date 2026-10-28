@@ -25,7 +25,7 @@ import { pluginCommand } from "./plugin.ts";
 import { fail, intro, table, tilde } from "./ui.ts";
 
 const INSTALL_USAGE = `Install an MCP server or a skill into every tool you have installed, or
-a seats plugin into herdr.
+a seats plugin into herdr (for Paseo, it prints the steps).
 
 Usage:
   seats install mcp <name> [--set tool.key=value ...] -- <command> [args...] [--env KEY=VALUE ...]
