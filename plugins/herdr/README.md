@@ -7,10 +7,13 @@ When herdr detects Claude Code or Codex in a pane, or the pane's status changes,
 Needs herdr 0.9.2 or later and `seats` on your `PATH`.
 
 ```bash
+seats install plugin herdr
+# or by hand:
 herdr plugin install gelzinn/seats/plugins/herdr
-# or, from a checkout:
-herdr plugin link /path/to/seats/plugins/herdr
+herdr plugin link /path/to/seats/plugins/herdr   # from a checkout
 ```
+
+`seats doctor` checks the plugin, herdr's version and its integrations.
 
 Keep herdr's own integrations for the tools you use (`herdr integration install claude`, `herdr integration install codex`): they report the session id this plugin reads.
 

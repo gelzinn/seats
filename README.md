@@ -462,14 +462,16 @@ seatEnv("claude", "work"); // { CLAUDE_CONFIG_DIR: "/home/you/.config/seats/clau
 
 `listSeatDirs(provider)` lists every seat folder, signed in or not. `pinnedSeat(provider, cwd)` returns the `{ slug, file }` a project's `.seats` pins, or undefined. It doesn't check that the seat exists, so pass the slug to `seatDir` and report a missing seat rather than falling back. The library only reads folders and never runs a CLI.
 
-**Paseo.** [`plugins/paseo`](plugins/paseo) is a Paseo plugin that sets `CLAUDE_CONFIG_DIR` from seats whenever a `claude-<seat>` provider opens a session. Keep the provider's `env` in Paseo's `config.json` too, because provider diagnostics and model listing don't go through the plugin. Paseo only loads modules from inside the plugin folder, so the plugin installs seats as a copy (`install-links`). After changing the library, run `bun run build` here and `npm install` in `plugins/paseo`, then reload the plugin. It used to live in `integrations/paseo`: if you linked Paseo to that path, point it at `plugins/paseo` instead.
+**Paseo.** [`plugins/paseo`](plugins/paseo) is a Paseo plugin that sets `CLAUDE_CONFIG_DIR` from seats whenever a `claude-<seat>` provider opens a session. Keep the provider's `env` in Paseo's `config.json` too, because provider diagnostics and model listing don't go through the plugin. Paseo only loads modules from inside the plugin folder, so the plugin installs seats as a copy (`install-links`). After changing the library, run `bun run build` here and `npm install` in `plugins/paseo`, then reload the plugin. `seats install plugin paseo` prints the config to add. It used to live in `integrations/paseo`: if you linked Paseo to that path, point it at `plugins/paseo` instead (`seats doctor` notices).
 
 **herdr.** [`plugins/herdr`](plugins/herdr) makes [herdr](https://herdr.dev) reopen each Claude Code and Codex pane on the seat its conversation ran on. On its own, herdr restores those panes after a restart with `claude --resume <id>` or `codex resume <id>`, which open the active seat. The plugin runs `seats hook herdr` when herdr detects Claude Code or Codex in a pane or the pane's status changes, finds the seat that has the conversation (the most recently written copy, when several have it) and reports `seats run claude:<seat> --resume <id>` or `seats run codex:<seat> resume <id>` to herdr, which then uses it over its own. Codex conversations are only found by file name, never listed or copied, so `seats sessions` and `seats move` stay Claude-only. Needs herdr 0.9.2 or later, its integration for each tool (`herdr integration install claude`, `herdr integration install codex`) and `seats` on your `PATH`:
 
 ```bash
-herdr plugin install gelzinn/seats/plugins/herdr
-herdr plugin link ./plugins/herdr   # or from a checkout
+seats install plugin herdr     # --dry-run prints the herdr command
+seats uninstall plugin herdr
 ```
+
+From a checkout it runs `herdr plugin link <checkout>/plugins/herdr`; from an installed binary, `herdr plugin install gelzinn/seats/plugins/herdr --ref v<version> --yes`, pinned to the installed seats version. It stops with a clear message when `herdr` or `seats` isn't on your `PATH`. The hook only searches the seat folders when a pane's conversation changes or herdr detects a new agent process in it (a restore, or an auto-switch reopening the conversation on the next seat), so a status change every turn costs one `herdr pane get`.
 
 ## Supported providers
 

@@ -79,6 +79,10 @@ Usage:
   seats uninstall mcp|skill <name>
                         Remove it from every tool; a server is marked so sync
                         won't add it back (--dry-run to preview)
+  seats install plugin herdr
+  seats uninstall plugin herdr
+                        Add or remove the herdr plugin that resumes panes on
+                        their seat (--dry-run to preview; paseo prints the steps)
   seats export <folder> Write your shared setup (MCP servers, skills, instructions,
                         shared tool config) to a folder, without secrets or
                         accounts, to carry to another machine (--dry-run to preview)

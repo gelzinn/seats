@@ -21,16 +21,20 @@ import { forTool, libraryFile, readLibrary, usesEnvRefs } from "../mcp/library.t
 import type { McpAdapter, McpServer, ToolOptions, ToolOptionValue } from "../mcp/types.ts";
 import { mcpAdapters, skillsTargets } from "../providers/index.ts";
 import { realPath, type SkillsTarget, skillsLibrary, toolSkillsDirs } from "../skills.ts";
+import { pluginCommand } from "./plugin.ts";
 import { fail, intro, table, tilde } from "./ui.ts";
 
-const INSTALL_USAGE = `Install an MCP server or a skill into every tool you have installed.
+const INSTALL_USAGE = `Install an MCP server or a skill into every tool you have installed, or
+a seats plugin into herdr.
 
 Usage:
   seats install mcp <name> [--set tool.key=value ...] -- <command> [args...] [--env KEY=VALUE ...]
   seats install mcp <name> --url <url> [--header "Key: Value" ...] [--sse] [--set tool.key=value ...]
   seats install skill <folder | git-url> [--skill <name>]
+  seats install plugin herdr | paseo
   seats uninstall mcp <name>
   seats uninstall skill <name>
+  seats uninstall plugin herdr | paseo
 
 Options:
   --set tool.key=value  Add a field to one tool's entry only, e.g.
@@ -50,6 +54,7 @@ Examples:
   seats install skill ./review
   seats install skill https://github.com/you/review-skill.git
   seats install skill https://github.com/you/skills.git --skill review
+  seats install plugin herdr
   seats uninstall mcp docs`;
 
 /** What happened, or in a dry run would happen, in the library or in one tool. */
@@ -644,13 +649,16 @@ const KINDS = ["mcp", "skill"];
 
 function kindOf(kind: string | undefined, command: string): "mcp" | "skill" {
   if (kind && KINDS.includes(kind)) return kind as "mcp" | "skill";
-  return fail(`${kind ? `Unknown kind "${kind}". ` : ""}Use seats ${command} mcp or seats ${command} skill.`);
+  return fail(
+    `${kind ? `Unknown kind "${kind}". ` : ""}Use seats ${command} mcp, seats ${command} skill or seats ${command} plugin.`,
+  );
 }
 
 /** `seats install mcp|skill …`: one server or skill into every installed tool. */
 export async function installCommand(argv: string[]): Promise<void> {
   const [kind, ...rest] = argv;
   if (!kind || kind === "--help" || kind === "-h") return console.log(INSTALL_USAGE);
+  if (kind === "plugin") return pluginCommand("install", rest);
   intro();
   const home = homedir();
   if (kindOf(kind, "install") === "mcp") {
@@ -674,6 +682,7 @@ export async function installCommand(argv: string[]): Promise<void> {
 export async function uninstallCommand(argv: string[]): Promise<void> {
   const [kind, ...rest] = argv;
   if (!kind || kind === "--help" || kind === "-h") return console.log(INSTALL_USAGE);
+  if (kind === "plugin") return pluginCommand("uninstall", rest);
   intro();
   const home = homedir();
   const what = kindOf(kind, "uninstall");

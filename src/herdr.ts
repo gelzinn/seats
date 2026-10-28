@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { seatFolders } from "./exclude.ts";
 import { seatSources } from "./providers/index.ts";
@@ -127,4 +127,36 @@ function readText(file: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** The id in `plugins/herdr/herdr-plugin.toml`. */
+export const HERDR_PLUGIN_ID = "seats.resume";
+/** Where `herdr plugin install` finds the plugin on GitHub. */
+export const HERDR_PLUGIN_REPO = "gelzinn/seats/plugins/herdr";
+
+/** What `herdr plugin list --json` says about one plugin. */
+export type HerdrPlugin = { enabled: boolean; root?: string; local: boolean };
+
+/**
+ * `plugins/herdr` next to the code, in a source checkout. Undefined in a
+ * compiled binary, which carries no files besides itself.
+ */
+export function herdrPluginDir(): string | undefined {
+  const dir = join(import.meta.dir, "..", "plugins", "herdr");
+  return existsSync(join(dir, "herdr-plugin.toml")) ? dir : undefined;
+}
+
+/** The seats plugin as herdr has it, null when it has none, undefined when herdr didn't answer. */
+export function herdrPlugin(herdr: string, env: NodeJS.ProcessEnv = process.env): HerdrPlugin | null | undefined {
+  const listed = spawnSync(herdr, ["plugin", "list", "--json"], { encoding: "utf8", env, timeout: 5_000 });
+  if (listed.status !== 0) return undefined;
+  const plugins = record(parse(listed.stdout).result).plugins;
+  if (!Array.isArray(plugins)) return undefined;
+  const found = plugins.map(record).find((plugin) => plugin.plugin_id === HERDR_PLUGIN_ID);
+  if (!found) return null;
+  return {
+    enabled: found.enabled !== false,
+    root: typeof found.plugin_root === "string" ? found.plugin_root : undefined,
+    local: record(found.source).kind !== "github",
+  };
 }
