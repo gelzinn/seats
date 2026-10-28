@@ -32,7 +32,7 @@ describe("syncSeats", () => {
     write(".codex/auth.json", "only");
     write(".codex/config.toml", "model = 'x'\n");
 
-    expect(syncSeats(home)).toEqual({ linked: [], backups: [], merged: [] });
+    expect(syncSeats(home)).toEqual({ linked: [], backups: [], merged: [], hooked: [] });
     expect(lstatSync(join(home, ".codex/config.toml")).isFile()).toBe(true);
     expect(existsSync(join(home, ".config/seats/shared"))).toBe(false);
   });

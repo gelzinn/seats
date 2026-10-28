@@ -14,11 +14,13 @@ import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import pc from "picocolors";
 import { isInside } from "../fs.ts";
+import { reportHerdrResume } from "../herdr.ts";
 import { discoverSeatDirs, type SeatDir } from "../home-dirs.ts";
 import { listSeatDirs } from "../lib.ts";
 import { findPin, type Pin } from "../pins.ts";
 import { seatSources } from "../providers/index.ts";
 import { readConfig, seatsHome, writeConfig } from "../store.ts";
+import { pullTrust, pushFromSession } from "../trust.ts";
 import type { Seat, SeatSource, Usage } from "../types.ts";
 import { fail, tilde } from "./ui.ts";
 
@@ -214,6 +216,8 @@ export async function supervise(options: SuperviseOptions): Promise<number> {
     let args = options.args;
     let cwd = options.cwd ?? process.cwd();
     for (;;) {
+      // Trust given on another seat since this one last ran, so its CLI doesn't ask again.
+      pullTrust(home, source, seat.dir!);
       const child = spawn(binary, [...(supervised ? failover.settingsArgs(settings) : []), ...args], {
         stdio: "inherit",
         cwd,
@@ -369,15 +373,47 @@ Your active seat (~/.claude and friends) stays as it was; only that session move
 To get this for plain \`claude\`, add to your shell config: alias claude='seats run claude'`);
 }
 
-/**
- * `seats hook limit`: run by the CLI's own hook. Hands the report to the
- * supervising seats process; outside a supervised session it does nothing.
- */
-export async function hookCommand(argv: string[]): Promise<void> {
-  const marker = process.env.SEATS_LIMIT_MARKER;
-  if (argv[0] !== "limit" || !marker) return;
+/** Reads stdin to the end, unless it's a terminal (a hook tried by hand). */
+async function readStdin(): Promise<string> {
+  if (process.stdin.isTTY) return "";
   let input = "";
   for await (const chunk of process.stdin) input += chunk;
+  return input;
+}
+
+/**
+ * Run by hooks, never by hand:
+ * - `seats hook limit`, the CLI's limit hook, hands the report to the
+ *   supervising seats process; outside a supervised session it does nothing.
+ * - `seats hook session`, Claude Code's SessionStart and Stop hooks, carries
+ *   folder trust from this seat to the others.
+ * - `seats hook herdr`, the herdr plugin, tells herdr to resume a pane's
+ *   conversation on the seat that has it.
+ *
+ * The last two print nothing (SessionStart output reaches the conversation)
+ * and never fail.
+ */
+export async function hookCommand(argv: string[]): Promise<void> {
+  if (argv[0] === "session") {
+    try {
+      await readStdin();
+      pushFromSession(homedir());
+    } catch {
+      // A hook must never get in the session's way.
+    }
+    return;
+  }
+  if (argv[0] === "herdr") {
+    try {
+      reportHerdrResume(homedir());
+    } catch {
+      // Same: herdr keeps its own resume command.
+    }
+    return;
+  }
+  const marker = process.env.SEATS_LIMIT_MARKER;
+  if (argv[0] !== "limit" || !marker) return;
+  const input = await readStdin();
   // Write then rename, so the supervisor never reads half a report.
   writeFileSync(`${marker}.tmp`, input || "{}");
   renameSync(`${marker}.tmp`, marker);

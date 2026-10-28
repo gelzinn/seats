@@ -57,6 +57,11 @@ export function readExclusions(home: string): Record<string, string[]> {
   return readConfig(home).exclude ?? {};
 }
 
+/** `config.json`'s `ownTrust`: the seats that keep their own folder trust. */
+export function readOwnTrust(home: string): string[] {
+  return readConfig(home).ownTrust ?? [];
+}
+
 /**
  * True when `path` really is, or sits inside, an item a seat keeps out of
  * sharing. Live paths like `~/.claude/CLAUDE.md` lead into the active seat,

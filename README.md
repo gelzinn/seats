@@ -27,7 +27,7 @@ Hitting a usage limit mid-task shouldn't mean logging out, logging back in and r
 
 - **Switch in one step.** Pick a seat and seats repoints `~/.claude`, `~/.codex` and the rest, then launches the CLI on that account.
 - **Bring your setup along.** Seats of the same tool share their config: settings, skills, agents, hooks, plugins, MCP servers and instructions. Only the login stays per account.
-- **Trust folders once.** Trusting a folder or approving a tool in one seat carries over to the others. You won't see the trust prompt again for that folder.
+- **Trust folders once.** Trusting a folder or approving a tool in one seat carries over to the others as soon as you do it, and every seat seats launches picks it up first. You won't see the trust prompt again for that folder.
 - **One setup across tools.** An MCP server added in Cursor shows up in Claude Code, Codex, Gemini, Copilot, Kiro, OpenCode and Antigravity, each in its own format. Skills and global instructions follow too.
 - **Keep your home tidy.** All seats live under `~/.config/seats` instead of a pile of `~/.claude-*` folders.
 - **Switch API keys and cloud profiles too.** OpenRouter, OpenAI, AWS, Google Cloud and Azure seats write env vars to a single file for your shell to source.
@@ -93,6 +93,7 @@ seats sync --dry-run     # preview what sync would share, add or link
 seats sync               # share config between seats and across tools
 seats exclude claude:acme CLAUDE.md   # give one seat its own copy of a shared item
 seats exclude claude:acme mcp gmail   # keep an MCP server out of one seat
+seats exclude claude:acme trust       # this seat neither gives nor gets folder trust
 seats install mcp docs -- npx -y docs-mcp   # add an MCP server to every tool
 seats uninstall mcp docs                    # and take it out of every tool
 seats export ~/dotfiles/seats   # your shared setup, without secrets, to carry to another machine
@@ -326,23 +327,27 @@ When a tool has two or more seats, activating one of them, or running `seats syn
 - **Files and folders** move into `~/.config/seats/shared/<tool>` and each seat gets a symlink. The newest copy wins. Folders are merged entry by entry, and JSON files keep keys that only an older copy had. Anything that can't be merged is kept as `*.seats-backup`, never deleted.
 - **Symlinks you made yourself** that point outside the seat folders, for example into a dotfiles repo, are left untouched.
 - **`.claude.json`** is merged in place. Trust and approvals are only ever added, never revoked. An MCP server already defined in a seat is never overwritten. Everything else in the file is left alone. Writes go through the `~/.claude.json` symlink and keep mode `600`. A seat whose file doesn't parse is skipped.
+- **Trust between syncs.** `seats sync`, switching and `seats add` put a `SessionStart` and a `Stop` hook running `seats hook session` in the shared Claude `settings.json`, next to any hooks you already have. It does nothing when `seats` isn't on the `PATH` Claude Code sees, for example a Claude started from a desktop launcher without `~/.local/bin`. When a session trusts a folder or approves a tool, the hook carries it to the other seats right away, so it works for plain `claude` too. It never rewrites the `.claude.json` of the seat it runs in, nor of a seat whose Claude is open (Claude Code rewrites that file itself); those pick it up when seats next launches them, since `seats run`, the picker, `seats move`, auto-switch and herdr restores all merge the other seats' trust into a seat just before it starts. A seat that keeps its own `settings.json` doesn't get the hook, so trust given there only spreads on `seats sync` or its next launch through seats.
 
 </details>
 
 ### Keep something out of one seat
 
-Every seat of a tool gets the same CLAUDE.md, skills and MCP servers. A client's seat may need its own instructions, or no access to your personal mail server:
+Every seat of a tool gets the same CLAUDE.md, skills, MCP servers and folder trust. A client's seat may need its own instructions, no access to your personal mail server, or no say in which of your folders are trusted:
 
 ```bash
 seats exclude claude:acme CLAUDE.md   # this seat gets its own CLAUDE.md
 seats exclude claude:acme mcp gmail   # and no gmail MCP server
+seats exclude claude:acme trust       # and its own folder trust
 seats exclude claude:acme             # list what it keeps out
 seats include claude:acme CLAUDE.md   # share it again
 seats include claude:acme mcp gmail
+seats include claude:acme trust
 ```
 
 - **A shared item** (any name from the table above, like `CLAUDE.md`, `skills` or `settings.json`) stops being a link. The seat gets a copy of the shared one, so nothing changes until you edit it; seats prints its path. From then on `seats sync`, switching seats and the sync across tools leave that copy alone, even while the seat is active. The choice is saved in `~/.config/seats/config.json`.
 - **An MCP server** is removed from that seat's `.claude.json`, and the seat id is added to the server's `skip` in `mcp.json` (`"skip": ["claude:acme"]`). Merging seats, `seats sync` and `seats install mcp` then never write it into that seat. This works for Claude seats, which keep their own MCP servers.
+- **Folder trust** (`trust`) covers the whole per-folder half of `.claude.json`: trusted folders, approved tools and approved `.mcp.json` servers. A seat that keeps its own neither gives any to the other seats nor gets theirs, on sync, on launch or from the session hook. What it already got stays. User MCP servers still follow the rules above. This works for Claude seats; other tools keep trust in a shared file, so exclude that file instead (Codex's `config.toml`, Gemini's `trustedFolders.json`).
 - **`seats include`** undoes it. The seat's own copy moves aside as `<item>.seats-backup`, not into the shared one, since it may hold things the other seats shouldn't see. A server comes back on the next `seats sync` or switch.
 
 ## One setup across tools
@@ -456,7 +461,14 @@ seatEnv("claude", "work"); // { CLAUDE_CONFIG_DIR: "/home/you/.config/seats/clau
 
 `listSeatDirs(provider)` lists every seat folder, signed in or not. `pinnedSeat(provider, cwd)` returns the `{ slug, file }` a project's `.seats` pins, or undefined. It doesn't check that the seat exists, so pass the slug to `seatDir` and report a missing seat rather than falling back. The library only reads folders and never runs a CLI.
 
-**Paseo.** [`integrations/paseo`](integrations/paseo) is a Paseo plugin that sets `CLAUDE_CONFIG_DIR` from seats whenever a `claude-<seat>` provider opens a session. Keep the provider's `env` in Paseo's `config.json` too, because provider diagnostics and model listing don't go through the plugin. Paseo only loads modules from inside the plugin folder, so the plugin installs seats as a copy (`install-links`). After changing the library, run `bun run build` here and `npm install` in `integrations/paseo`, then reload the plugin.
+**Paseo.** [`plugins/paseo`](plugins/paseo) is a Paseo plugin that sets `CLAUDE_CONFIG_DIR` from seats whenever a `claude-<seat>` provider opens a session. Keep the provider's `env` in Paseo's `config.json` too, because provider diagnostics and model listing don't go through the plugin. Paseo only loads modules from inside the plugin folder, so the plugin installs seats as a copy (`install-links`). After changing the library, run `bun run build` here and `npm install` in `plugins/paseo`, then reload the plugin. It used to live in `integrations/paseo`: if you linked Paseo to that path, point it at `plugins/paseo` instead.
+
+**herdr.** [`plugins/herdr`](plugins/herdr) makes [herdr](https://herdr.dev) reopen each Claude Code and Codex pane on the seat its conversation ran on. On its own, herdr restores those panes after a restart with `claude --resume <id>` or `codex resume <id>`, which open the active seat. The plugin runs `seats hook herdr` when herdr detects Claude Code or Codex in a pane or the pane's status changes, finds the seat that has the conversation (the most recently written copy, when several have it) and reports `seats run claude:<seat> --resume <id>` or `seats run codex:<seat> resume <id>` to herdr, which then uses it over its own. Codex conversations are only found by file name, never listed or copied, so `seats sessions` and `seats move` stay Claude-only. Needs herdr 0.9.2 or later, its integration for each tool (`herdr integration install claude`, `herdr integration install codex`) and `seats` on your `PATH`:
+
+```bash
+herdr plugin install gelzinn/seats/plugins/herdr
+herdr plugin link ./plugins/herdr   # or from a checkout
+```
 
 ## Supported providers
 
@@ -506,11 +518,13 @@ Seats never signs in for you and never sends credentials anywhere. Keys stay in 
 | `src/providers/index.ts` | The list of providers; everything else reads from it |
 | `src/providers/helpers/` | Code shared by several providers (seat folders, API keys) |
 | `src/cli.ts` | Help text and routing to the commands |
-| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `run` (`run`, `auto-switch`, the limit hook), `pin` (`pin`, `unpin`), `sessions` (`sessions`, `move`), `manage` (`rename`, `remove`), `add`, `health`, `usage`, `sync`, `install` (`install`, `uninstall`), `migrate` |
+| `src/commands/<name>.ts` | One file per command, with its logic: `switch` (`seats`, `use`), `list` (`list`, `current`), `run` (`run`, `auto-switch`, `hook`), `pin` (`pin`, `unpin`), `sessions` (`sessions`, `move`), `manage` (`rename`, `remove`), `add`, `health`, `usage`, `sync`, `install` (`install`, `uninstall`), `migrate` |
 | `src/home-dirs.ts`, `src/store.ts` | Finding and naming seat folders; the `~/.config/seats` layout and `active.env` |
 | `src/share.ts`, `src/skills.ts`, `src/instructions.ts` | Sharing files between seats, and skills and instructions across tools |
 | `src/mcp/` | The tool-neutral MCP library and the JSON helpers adapters build on |
+| `src/trust.ts`, `src/herdr.ts` | Folder trust between seats on launch and from the session hook; resume commands for herdr |
 | `src/fs.ts`, `src/types.ts`, `src/lib.ts` | Filesystem helpers, shared types, and the library API for other tools |
+| `plugins/` | The Paseo and herdr plugins |
 | `test/` | Tests, mirroring `src/`; `test/helpers/temp-home.ts` builds a throwaway `$HOME` |
 | `install.sh`, `.github/` | The installer, CI and the release pipeline |
 

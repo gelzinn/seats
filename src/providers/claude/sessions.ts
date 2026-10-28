@@ -1,4 +1,4 @@
-import { closeSync, openSync, readdirSync, readSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readdirSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { SeatSource, Session } from "../../types.ts";
 import { claudeFailover } from "./failover.ts";
@@ -116,7 +116,19 @@ export function claudeSessionList(dir: string): Session[] {
   return sessions;
 }
 
+/** `<seat>/projects/<any folder>/<id>.jsonl`, found by name alone. */
+export function findClaudeSession(dir: string, sessionId: string): string | undefined {
+  const projects = join(dir, "projects");
+  const name = `${sessionId}.jsonl`;
+  for (const project of list(projects)) {
+    const file = join(projects, project, name);
+    if (existsSync(file)) return file;
+  }
+  return undefined;
+}
+
 export const claudeSessions: NonNullable<SeatSource["sessions"]> = {
   list: claudeSessionList,
   resumeArgs: (sessionId) => claudeFailover.resumeArgs(sessionId),
+  find: findClaudeSession,
 };

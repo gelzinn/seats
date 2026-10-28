@@ -69,20 +69,26 @@ const programName = (arg: string) => basename(arg).replace(/\.(c|m)?js$|\.exe$/,
 
 /**
  * Processes of `binary` launched with `envName` set to `dir`: the sessions
- * still reading and writing that seat folder. Never includes this process.
+ * still reading and writing that seat folder. With `fallback`, the folder the
+ * CLI uses when `envName` isn't set (its live path), a process without it
+ * counts too when `fallback` leads to `dir`. Never includes this process.
  */
 export function processesUsing(
   binary: string,
   envName: string,
   dir: string,
   list: () => RunningProcess[] = runningProcesses,
+  fallback?: string,
 ): RunningProcess[] {
   const target = real(dir);
-  return list().filter(
-    (item) =>
+  const folder = (item: RunningProcess) => item.env[envName] ?? fallback;
+  return list().filter((item) => {
+    const used = folder(item);
+    return (
       item.pid !== process.pid &&
-      item.env[envName] !== undefined &&
-      real(item.env[envName]) === target &&
-      item.argv.some((arg) => programName(arg) === binary),
-  );
+      used !== undefined &&
+      real(used) === target &&
+      item.argv.some((arg) => programName(arg) === binary)
+    );
+  });
 }

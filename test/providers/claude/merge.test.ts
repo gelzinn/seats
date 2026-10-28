@@ -1,5 +1,8 @@
-import { describe, expect, test } from "bun:test";
-import { mergeClaudeState } from "../../../src/providers/claude/merge.ts";
+import { afterEach, describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { mergeClaudeConfigs, mergeClaudeState } from "../../../src/providers/claude/merge.ts";
+import { tempHome } from "../../helpers/temp-home.ts";
 
 describe("mergeClaudeState", () => {
   test("doesn't copy servers the target keeps out, in any case", () => {
@@ -67,5 +70,45 @@ describe("mergeClaudeState", () => {
   test("returns undefined when nothing changes", () => {
     const config = { projects: { "/p": { hasTrustDialogAccepted: true } } };
     expect(mergeClaudeState(config, [config, {}])).toBeUndefined();
+  });
+});
+
+describe("mergeClaudeConfigs", () => {
+  let env: ReturnType<typeof tempHome>;
+  afterEach(() => env.cleanup());
+
+  /** Three seats, each trusting its own folder and holding its own MCP server. */
+  function threeSeats(): Record<"a" | "b" | "c", string> {
+    env = tempHome();
+    const dirs = { a: "", b: "", c: "" };
+    for (const name of ["a", "b", "c"] as const) {
+      env.write(`seats/${name}/.claude.json`, {
+        projects: { [`/${name}`]: { hasTrustDialogAccepted: true } },
+        mcpServers: { [name]: { type: "http" } },
+      });
+      dirs[name] = join(env.home, "seats", name);
+    }
+    return dirs;
+  }
+  const read = (dir: string) => JSON.parse(readFileSync(join(dir, ".claude.json"), "utf8"));
+
+  test("a seat that keeps its own trust neither gives nor gets projects, but still shares servers", () => {
+    const { a, b, c } = threeSeats();
+    mergeClaudeConfigs([a, b, c], { ownTrust: (dir) => dir === c });
+
+    expect(Object.keys(read(a).projects).sort()).toEqual(["/a", "/b"]);
+    expect(Object.keys(read(b).projects).sort()).toEqual(["/a", "/b"]);
+    expect(Object.keys(read(c).projects)).toEqual(["/c"]);
+    for (const dir of [a, b, c]) expect(Object.keys(read(dir).mcpServers).sort()).toEqual(["a", "b", "c"]);
+  });
+
+  test("writes only the targets, from every seat", () => {
+    const { a, b, c } = threeSeats();
+    const before = readFileSync(join(a, ".claude.json"), "utf8");
+    expect(mergeClaudeConfigs([a, b, c], { targets: [b] })).toEqual([join(b, ".claude.json")]);
+
+    expect(Object.keys(read(b).projects).sort()).toEqual(["/a", "/b", "/c"]);
+    expect(readFileSync(join(a, ".claude.json"), "utf8")).toBe(before);
+    expect(Object.keys(read(c).projects)).toEqual(["/c"]);
   });
 });

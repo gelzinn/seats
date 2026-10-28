@@ -3,28 +3,31 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
-import { findSeatFolder, mcpKeptOut, readExclusions, type SeatFolder, seatIdOf } from "../exclude.ts";
+import { findSeatFolder, mcpKeptOut, readExclusions, readOwnTrust, type SeatFolder, seatIdOf } from "../exclude.ts";
 import { isSymlink, lexists, linkTarget, moveTree, replaceSymlink, writeJsonAtomic } from "../fs.ts";
 import { libraryFile, readLibrary } from "../mcp/library.ts";
 import type { McpAdapter } from "../mcp/types.ts";
-import { mcpAdapters, providers } from "../providers/index.ts";
+import { mcpAdapters, providers, seatSources } from "../providers/index.ts";
 import { backupPath } from "../share.ts";
 import { realPath } from "../skills.ts";
 import { readConfig, sharedDir, writeConfig } from "../store.ts";
 import { fail, intro, tilde } from "./ui.ts";
 
-const USAGE = `Keep a shared item or an MCP server out of one seat.
+const USAGE = `Keep a shared item, an MCP server or folder trust out of one seat.
 
 Usage:
   seats exclude <seat-id>              List what the seat keeps out
   seats exclude <seat-id> <item>       Give the seat its own copy of a shared item
   seats exclude <seat-id> mcp <name>   Keep an MCP server out of the seat
+  seats exclude <seat-id> trust        Neither give nor get folder trust and approvals
   seats include <seat-id> <item>       Link the seat to the shared copy again
   seats include <seat-id> mcp <name>   Let sync add the server back
+  seats include <seat-id> trust        Share folder trust again
 
 Examples:
   seats exclude claude:acme CLAUDE.md
   seats exclude claude:acme mcp gmail
+  seats exclude claude:acme trust
   seats include claude:acme CLAUDE.md`;
 
 const lower = (name: string) => name.toLowerCase();
@@ -162,8 +165,47 @@ export function includeMcp(home: string, id: string, name: string): string {
   return key;
 }
 
-/** What seat `id` keeps out: its own copies of shared items, and MCP servers. */
-export function listExclusions(home: string, id: string): { items: string[]; mcp: string[] } {
+/** The seat for `id`, after checking its tool merges folder trust between seats. */
+function trustSeat(home: string, id: string): SeatFolder {
+  const seat = findSeatFolder(home, id);
+  if (seat.source.mergeSeats) return seat;
+  const tools = seatSources.filter((source) => source.mergeSeats).map((source) => source.id);
+  throw new Error(
+    `${seat.source.id} seats keep folder trust in a shared file. Per-seat trust works for: ${tools.join(", ")}.`,
+  );
+}
+
+function setOwnTrust(home: string, ids: string[]): void {
+  const config = readConfig(home);
+  writeConfig(home, { ...config, ownTrust: ids.length > 0 ? ids : undefined });
+}
+
+/**
+ * Makes seat `id` keep its own folder trust and approvals: merging, sync and
+ * launches neither carry its trust to other seats nor theirs to it. What it
+ * already got stays. Returns false when it already kept its own.
+ */
+export function excludeTrust(home: string, id: string): boolean {
+  trustSeat(home, id);
+  const current = readOwnTrust(home);
+  if (current.includes(id)) return false;
+  setOwnTrust(home, [...current, id]);
+  return true;
+}
+
+/** Shares folder trust with seat `id` again, from the next sync or launch on. */
+export function includeTrust(home: string, id: string): void {
+  trustSeat(home, id);
+  const current = readOwnTrust(home);
+  if (!current.includes(id)) throw new Error(`${id} already shares folder trust.`);
+  setOwnTrust(
+    home,
+    current.filter((item) => item !== id),
+  );
+}
+
+/** What seat `id` keeps out: its own copies of shared items, MCP servers, and whether its trust is its own. */
+export function listExclusions(home: string, id: string): { items: string[]; mcp: string[]; trust: boolean } {
   findSeatFolder(home, id);
   let library = {};
   try {
@@ -171,7 +213,11 @@ export function listExclusions(home: string, id: string): { items: string[]; mcp
   } catch {
     // an unreadable mcp.json keeps nothing out
   }
-  return { items: readExclusions(home)[id] ?? [], mcp: mcpKeptOut(library, id) };
+  return {
+    items: readExclusions(home)[id] ?? [],
+    mcp: mcpKeptOut(library, id),
+    trust: readOwnTrust(home).includes(id),
+  };
 }
 
 function run<T>(step: () => T): T {
@@ -183,17 +229,20 @@ function run<T>(step: () => T): T {
 }
 
 function printList(home: string, id: string): void {
-  const { items, mcp } = run(() => listExclusions(home, id));
-  if (items.length === 0 && mcp.length === 0) {
+  const { items, mcp, trust } = run(() => listExclusions(home, id));
+  if (items.length === 0 && mcp.length === 0 && !trust) {
     p.outro(`${id} shares everything.`);
     return;
   }
   for (const item of items) p.log.step(`${item}  ${pc.dim("own copy")}`);
   for (const name of mcp) p.log.step(`mcp ${name}  ${pc.dim("kept out")}`);
-  p.outro(`Undo with ${pc.cyan(`seats include ${id} <item>`)} or ${pc.cyan(`seats include ${id} mcp <name>`)}.`);
+  if (trust) p.log.step(`trust  ${pc.dim("own folder trust and approvals")}`);
+  p.outro(
+    `Undo with ${pc.cyan(`seats include ${id} <item>`)}, ${pc.cyan(`seats include ${id} mcp <name>`)} or ${pc.cyan(`seats include ${id} trust`)}.`,
+  );
 }
 
-/** `seats exclude <seat-id> [<item> | mcp <name>]` */
+/** `seats exclude <seat-id> [<item> | mcp <name> | trust]` */
 export async function excludeCommand(args: string[]): Promise<void> {
   const [id, item, name, ...extra] = args;
   if (!id || id === "--help" || id === "-h" || extra.length > 0) return console.log(USAGE);
@@ -211,6 +260,11 @@ export async function excludeCommand(args: string[]): Promise<void> {
     return p.outro(`${done} ${pc.cyan(result.name)} for ${id}. Sync won't add it back.${where}`);
   }
 
+  if (item === "trust") {
+    if (!run(() => excludeTrust(home, id))) return p.outro(`${id} already keeps its own folder trust.`);
+    return p.outro(`${id} keeps its own folder trust and approvals. It neither gives nor gets any from now on.`);
+  }
+
   const result = run(() => excludeItem(home, id, item));
   if (result.status === "already")
     return p.outro(`${id} already keeps its own ${item}.\n${pc.dim(tilde(result.path))}`);
@@ -218,7 +272,7 @@ export async function excludeCommand(args: string[]): Promise<void> {
   p.outro(`${id} keeps its own ${item}. ${note}\n${pc.dim(tilde(result.path))}`);
 }
 
-/** `seats include <seat-id> <item> | mcp <name>` */
+/** `seats include <seat-id> <item> | mcp <name> | trust` */
 export async function includeCommand(args: string[]): Promise<void> {
   const [id, item, name, ...extra] = args;
   if (!id || !item || id === "--help" || id === "-h" || extra.length > 0) return console.log(USAGE);
@@ -230,6 +284,11 @@ export async function includeCommand(args: string[]): Promise<void> {
     if (!name) fail("Name the MCP server, e.g. seats include claude:acme mcp gmail");
     const key = run(() => includeMcp(home, id, name));
     return p.outro(`${id} gets ${pc.cyan(key)} again on the next seats sync or switch.`);
+  }
+
+  if (item === "trust") {
+    run(() => includeTrust(home, id));
+    return p.outro(`${id} shares folder trust again, from the next seats sync or launch.`);
   }
 
   const result = run(() => includeItem(home, id, item));
